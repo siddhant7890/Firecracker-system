@@ -1,36 +1,62 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Binaries and build output
+/bin/
+/build/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+onalr-backend
+main
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
+# Go specific
+*.test
+*.out
+vendor/
+go.work
+go.work.sum
 
-# testing
-/coverage
+# Coverage
+coverage.txt
+coverage.out
+coverage.html
 
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# local env files
-.env*.local
+# Environment / secrets
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+service-account*.json
+gcp-key*.json
 
-# vercel
-.vercel
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# Logs
+*.log
+logs/
+
+# Air (Go live reload) tmp folder
+tmp/
+.air.toml.local
+
+# Database dumps / local sqlite
+*.db
+*.sqlite
+*.sqlite3
+/dumps/
+
+# Docker
+docker-compose.override.yml
+
+# Generated exports (Excel/Tally files created at runtime)
+/exports/
+*.xlsx
+*.xml.tally
