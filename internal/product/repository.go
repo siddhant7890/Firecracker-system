@@ -43,6 +43,49 @@ func (r *Repository) Create(ctx context.Context, adminID int, req CreateProductR
 	return scanProduct(row)
 }
 
+// BulkUpsert inserts or updates products keyed on (admin_id, item_code): an
+// existing item_code gets its fields overwritten, a new one is inserted.
+// is_active/is_deleted are left untouched on update. Requires the partial
+// unique index on (admin_id, item_code) added in migration 004.
+func (r *Repository) BulkUpsert(ctx context.Context, adminID int, rows []BulkUploadRow) (inserted, updated int, err error) {
+	if len(rows) == 0 {
+		return 0, 0, nil
+	}
+
+	batch := &pgx.Batch{}
+	for _, row := range rows {
+		batch.Queue(`
+			INSERT INTO products (admin_id, item_code, name, category, hsn_code, unit, taxable_value, gst_percent)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			ON CONFLICT (admin_id, item_code) WHERE item_code IS NOT NULL DO UPDATE SET
+				name = EXCLUDED.name,
+				category = EXCLUDED.category,
+				hsn_code = EXCLUDED.hsn_code,
+				unit = EXCLUDED.unit,
+				taxable_value = EXCLUDED.taxable_value,
+				gst_percent = EXCLUDED.gst_percent,
+				updated_at = now()
+			RETURNING (xmax = 0) AS inserted`,
+			adminID, row.ItemCode, row.Name, row.Category, row.HSNCode, row.Unit, row.TaxableValue, row.GSTPercent)
+	}
+
+	br := r.db.SendBatch(ctx, batch)
+	defer br.Close()
+
+	for range rows {
+		var wasInsert bool
+		if scanErr := br.QueryRow().Scan(&wasInsert); scanErr != nil {
+			return inserted, updated, scanErr
+		}
+		if wasInsert {
+			inserted++
+		} else {
+			updated++
+		}
+	}
+	return inserted, updated, nil
+}
+
 // ListByAdmin powers both the admin "Product Management" table (activeOnly
 // false) and the staff "New Bill" product picker (activeOnly true, which
 // also excludes soft-deleted products). search matches against item_code,

@@ -85,6 +85,13 @@ func main() {
 	adminReports := adminGroup.Group("/reports")
 	reportHandler.Register(adminReports)
 
+	// NOTE: left unauthenticated (no RequireAuth) so the Excel download can be
+	// opened directly in a browser during testing. admin_id is passed as a
+	// query param since there's no JWT to derive it from. Re-add auth before
+	// shipping this to production.
+	reportsPublic := api.Group("/admin/reports")
+	reportHandler.RegisterDownload(reportsPublic)
+
 	// --- Mobile app (JWT role=sales_staff) ---
 	salesGroup := api.Group("/sales", middleware.RequireAuth(auth.RoleSalesStaff))
 	salesHandler.Register(salesGroup)

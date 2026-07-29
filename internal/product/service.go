@@ -1,6 +1,9 @@
 package product
 
-import "context"
+import (
+	"context"
+	"io"
+)
 
 type Service struct {
 	repo *Repository
@@ -19,6 +22,23 @@ func (s *Service) Create(ctx context.Context, adminID int, req CreateProductRequ
 // sales-agent "New Bill" product picker (also excludes soft-deleted rows).
 func (s *Service) List(ctx context.Context, adminID int, activeOnly bool, category, search string, start, limit int) ([]Product, error) {
 	return s.repo.ListByAdmin(ctx, adminID, activeOnly, category, search, start, limit)
+}
+
+// BulkUpload parses a bulk-upload spreadsheet and upserts its rows by
+// item_code: an existing item_code updates that product, a new one inserts.
+// Invalid rows are skipped and reported rather than failing the whole file.
+func (s *Service) BulkUpload(ctx context.Context, adminID int, file io.Reader) (BulkUploadResult, error) {
+	rows, skipped, err := parseBulkUploadRows(file)
+	if err != nil {
+		return BulkUploadResult{}, err
+	}
+
+	inserted, updated, err := s.repo.BulkUpsert(ctx, adminID, rows)
+	if err != nil {
+		return BulkUploadResult{}, err
+	}
+
+	return BulkUploadResult{Inserted: inserted, Updated: updated, Skipped: skipped}, nil
 }
 
 func (s *Service) Get(ctx context.Context, adminID, id int) (Product, error) {

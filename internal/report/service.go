@@ -15,17 +15,17 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) BillWise(ctx context.Context, adminID int, f Filter) ([]BillRow, error) {
-	return s.repo.BillWise(ctx, adminID, f)
+func (s *Service) BillWise(ctx context.Context, adminID int, f Filter, start, limit int) ([]BillRow, error) {
+	return s.repo.BillWise(ctx, adminID, f, start, limit)
 }
 
-func (s *Service) ProductWise(ctx context.Context, adminID int, f Filter) ([]ProductRow, error) {
-	return s.repo.ProductWise(ctx, adminID, f)
+func (s *Service) ProductWise(ctx context.Context, adminID int, f Filter, start, limit int) ([]ProductRow, error) {
+	return s.repo.ProductWise(ctx, adminID, f, start, limit)
 }
 
 // BuildBillWiseExcel powers the "Download Excel" button on the Bill-wise tab.
 func (s *Service) BuildBillWiseExcel(ctx context.Context, adminID int, f Filter) (*excelize.File, error) {
-	rows, err := s.BillWise(ctx, adminID, f)
+	rows, err := s.BillWise(ctx, adminID, f, 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func (s *Service) BuildBillWiseExcel(ctx context.Context, adminID int, f Filter)
 // BuildProductWiseExcel powers "Download Excel" on the Product-wise tab —
 // one row per billed item, matching the on-screen table exactly.
 func (s *Service) BuildProductWiseExcel(ctx context.Context, adminID int, f Filter) (*excelize.File, error) {
-	rows, err := s.ProductWise(ctx, adminID, f)
+	rows, err := s.ProductWise(ctx, adminID, f, 0, 0)
 	if err != nil {
 		return nil, err
 	}

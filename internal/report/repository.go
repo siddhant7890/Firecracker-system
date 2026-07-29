@@ -15,7 +15,9 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) BillWise(ctx context.Context, adminID int, f Filter) ([]BillRow, error) {
+// BillWise returns bill-wise report rows. limit > 0 pages the result set;
+// start is the offset applied when limit is set.
+func (r *Repository) BillWise(ctx context.Context, adminID int, f Filter, start, limit int) ([]BillRow, error) {
 	query := `
 		SELECT to_char(b.created_at, 'DD/MM/YYYY'), b.bill_no, b.customer_name, s.name,
 			(SELECT COUNT(*) FROM bill_items bi WHERE bi.bill_id = b.id),
@@ -24,11 +26,20 @@ func (r *Repository) BillWise(ctx context.Context, adminID int, f Filter) ([]Bil
 		FROM bills b JOIN sales_staff s ON s.id = b.sales_staff_id
 		WHERE b.admin_id = $1 AND b.created_at >= $2 AND b.created_at < $3`
 	args := []any{adminID, f.From, f.To}
+
 	if f.StaffID != nil {
 		args = append(args, *f.StaffID)
 		query += fmt.Sprintf(" AND b.sales_staff_id = $%d", len(args))
 	}
 	query += ` ORDER BY b.created_at DESC`
+	if limit > 0 {
+		args = append(args, limit)
+		query += fmt.Sprintf(" LIMIT $%d", len(args))
+	}
+	if start > 0 {
+		args = append(args, start)
+		query += fmt.Sprintf(" OFFSET $%d", len(args))
+	}
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
@@ -48,7 +59,9 @@ func (r *Repository) BillWise(ctx context.Context, adminID int, f Filter) ([]Bil
 	return out, rows.Err()
 }
 
-func (r *Repository) ProductWise(ctx context.Context, adminID int, f Filter) ([]ProductRow, error) {
+// ProductWise returns product-wise report rows. limit > 0 pages the result
+// set; start is the offset applied when limit is set.
+func (r *Repository) ProductWise(ctx context.Context, adminID int, f Filter, start, limit int) ([]ProductRow, error) {
 	query := `
 		SELECT to_char(b.created_at, 'DD/MM/YYYY'), b.bill_no, b.customer_name, bi.product_name, bi.hsn_code,
 			bi.qty, bi.rate, bi.taxable_amount, bi.cgst_percent, bi.cgst_amount, bi.sgst_percent, bi.sgst_amount, bi.total_amount
@@ -61,6 +74,14 @@ func (r *Repository) ProductWise(ctx context.Context, adminID int, f Filter) ([]
 		query += fmt.Sprintf(" AND b.sales_staff_id = $%d", len(args))
 	}
 	query += ` ORDER BY b.created_at DESC, bi.id`
+	if limit > 0 {
+		args = append(args, limit)
+		query += fmt.Sprintf(" LIMIT $%d", len(args))
+	}
+	if start > 0 {
+		args = append(args, start)
+		query += fmt.Sprintf(" OFFSET $%d", len(args))
+	}
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {

@@ -41,3 +41,33 @@ type UpdateProductRequest struct {
 	GSTPercent   *float64 `json:"gst_percent"`
 	ImageURL     *string  `json:"image_url"`
 }
+
+// BulkUploadRow is one validated, ready-to-persist row from a bulk upload
+// spreadsheet. TaxableValue is back-computed from the sheet's Price (which
+// is GST-inclusive) and GSTPercent, since the sheet doesn't carry it directly.
+type BulkUploadRow struct {
+	ItemCode     string
+	Name         string
+	Category     string
+	HSNCode      string
+	Unit         string
+	GSTPercent   float64
+	TaxableValue float64
+}
+
+// BulkUploadRowError explains why a spreadsheet row was skipped. Row is
+// 1-indexed against the spreadsheet, including the header row (so the first
+// data row is Row 2), matching what a user sees when they open the file.
+type BulkUploadRowError struct {
+	Row    int    `json:"row"`
+	Reason string `json:"reason"`
+}
+
+// BulkUploadResult summarizes a bulk upload: existing item codes were
+// updated, new ones were inserted, invalid rows were skipped (not failed —
+// the rest of the file still processes).
+type BulkUploadResult struct {
+	Inserted int                  `json:"inserted"`
+	Updated  int                  `json:"updated"`
+	Skipped  []BulkUploadRowError `json:"skipped,omitempty"`
+}

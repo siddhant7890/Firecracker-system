@@ -23,6 +23,7 @@ func NewHandler(service *Service) *Handler {
 // Management" screen.
 func (h *Handler) RegisterAdminRoutes(rg *gin.RouterGroup) {
 	rg.POST("", h.create)
+	rg.POST("/bulk-upload", h.bulkUpload)
 	rg.GET("", h.listAll)
 	rg.GET("/:id", h.get)
 	rg.PUT("/:id", h.update)
@@ -49,6 +50,32 @@ func (h *Handler) create(c *gin.Context) {
 		return
 	}
 	response.OK(c, http.StatusCreated, "product added", p)
+}
+
+// bulkUpload handles the "Bulk Upload" spreadsheet: item_code, name,
+// category, hsn_code, unit, gst_percent, price. Existing item codes are
+// updated, new ones are inserted; taxable_value is derived server-side from
+// price and gst_percent since the sheet only carries the GST-inclusive price.
+func (h *Handler) bulkUpload(c *gin.Context) {
+	claims := middleware.FromContext(c)
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, "file is required")
+		return
+	}
+	f, err := fileHeader.Open()
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, "could not read file")
+		return
+	}
+	defer f.Close()
+
+	result, err := h.service.BulkUpload(c.Request.Context(), claims.AdminID, f)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.OK(c, http.StatusOK, "bulk upload complete", result)
 }
 
 func (h *Handler) listAll(c *gin.Context) {
