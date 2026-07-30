@@ -24,7 +24,6 @@ coverage.out
 coverage.html
 
 # Environment / secrets
-!.env.example
 *.pem
 *.key
 credentials.json
