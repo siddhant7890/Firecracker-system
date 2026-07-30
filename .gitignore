@@ -23,8 +23,6 @@ coverage.out
 coverage.html
 
 # Environment / secrets
-.env
-.env.*
 !.env.example
 *.pem
 *.key

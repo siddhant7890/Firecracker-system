@@ -1,6 +1,6 @@
 module salestrack
 
-go 1.26.2
+go go 1.23
 
 require (
 	github.com/gin-gonic/gin v1.10.0
