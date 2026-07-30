@@ -57,6 +57,7 @@ func parseBulkUploadRows(r io.Reader) ([]BulkUploadRow, []BulkUploadRowError, er
 	if err != nil {
 		return nil, nil, err
 	}
+	
 	if len(allRows) < 2 {
 		return nil, nil, errors.New("file has no data rows")
 	}
