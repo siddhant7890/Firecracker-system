@@ -1,8 +1,6 @@
-runtime: go126
+runtime: go124
 env: standard
 service: default
 instance_class: F1
 
-# Only needed if your main package isn't in the same folder as this file
-# (e.g. your entrypoint is cmd/api/main.go, not server/main.go).
 main: ./cmd/api
