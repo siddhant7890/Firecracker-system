@@ -1,6 +1,6 @@
 runtime: go126
 env: standard
-service: server
+service: default
 instance_class: F1
 
 # Only needed if your main package isn't in the same folder as this file
