@@ -1,7 +1,7 @@
 steps:
   - name: 'gcr.io/cloud-builders/gcloud'
     args: ['app', 'deploy', 'app.yaml']
-    dir: 'server'
+
 
 options:
   logging: CLOUD_LOGGING_ONLY
