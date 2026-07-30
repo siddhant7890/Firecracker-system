@@ -17,6 +17,7 @@ vendor/
 go.work
 go.work.sum
 
+
 # Coverage
 coverage.txt
 coverage.out
