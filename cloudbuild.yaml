@@ -1,11 +1,5 @@
 steps:
   # Step 1: Fetch Go module dependencies (fails fast before App Engine's own build)
-  - name: 'gcr.io/cloud-builders/go'
-    entrypoint: go
-    args: ['mod', 'download']
-    dir: 'server'
-    env: ['GO111MODULE=on']
-
   # Step 2: Deploy to App Engine
   - name: 'gcr.io/cloud-builders/gcloud'
     args: ['app', 'deploy', '/app.yaml']
