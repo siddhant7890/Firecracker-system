@@ -94,8 +94,8 @@ func (r *Repository) ListByAdmin(ctx context.Context, adminID int, activeOnly bo
 	query := `SELECT ` + selectCols + ` FROM products WHERE admin_id = $1`
 	args := []any{adminID}
 
-	if activeOnly {
-		query += ` AND is_active = true AND is_deleted = false`
+	if true {
+		query += ` AND is_deleted = false`
 	}
 	if category != "" && category != "All" {
 		args = append(args, category)

@@ -78,16 +78,16 @@ func (s *Service) Get(ctx context.Context, adminID, id int) (Bill, error) {
 	return s.repo.GetByID(ctx, adminID, id)
 }
 
-func (s *Service) Approve(ctx context.Context, adminID, id, approvedBy int, mode PaymentMode) (Bill, error) {
-	return s.repo.Approve(ctx, adminID, id, approvedBy, mode)
+func (s *Service) Approve(ctx context.Context, adminID, id, approvedBy int, approverRole string, mode PaymentMode) (Bill, error) {
+	return s.repo.Approve(ctx, adminID, id, approvedBy, approverRole, mode)
 }
 
 func (s *Service) UpdateBill(ctx context.Context, adminID, id int, req UpdateBillRequest) (Bill, error) {
 	return s.repo.UpdatePaymentMode(ctx, adminID, id, req.PaymentMode)
 }
 
-func (s *Service) Reject(ctx context.Context, adminID, id, approvedBy int) (Bill, error) {
-	return s.repo.Reject(ctx, adminID, id, approvedBy)
+func (s *Service) Reject(ctx context.Context, adminID, id, approvedBy int, approverRole string) (Bill, error) {
+	return s.repo.Reject(ctx, adminID, id, approvedBy, approverRole)
 }
 
 func (s *Service) SetRazorpayOrder(ctx context.Context, adminID, id int, orderID string) error {

@@ -139,7 +139,7 @@ func (h *Handler) approve(c *gin.Context) {
 	}
 
 	if req.PaymentMode == billing.PaymentCash {
-		bill, err := h.billing.Approve(c.Request.Context(), claims.AdminID, id, claims.UserID, billing.PaymentCash)
+		bill, err := h.billing.Approve(c.Request.Context(), claims.AdminID, id, claims.UserID, claims.Role, billing.PaymentCash)
 		if err != nil {
 			respondBillErr(c, err)
 			return
@@ -163,7 +163,7 @@ func (h *Handler) reject(c *gin.Context) {
 		response.Fail(c, http.StatusBadRequest, "invalid id")
 		return
 	}
-	bill, err := h.billing.Reject(c.Request.Context(), claims.AdminID, id, claims.UserID)
+	bill, err := h.billing.Reject(c.Request.Context(), claims.AdminID, id, claims.UserID, claims.Role)
 	if err != nil {
 		respondBillErr(c, err)
 		return

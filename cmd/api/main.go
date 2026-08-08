@@ -79,7 +79,10 @@ func main() {
 	adminStaff := adminGroup.Group("/staff")
 	staffHandler.Register(adminStaff)
 
-	adminBills := adminGroup.Group("/bills")
+	// Cash Counter: sales staff can act here too (approving/rejecting bills
+	// on the shop floor), not just admins, so this group accepts either role
+	// rather than inheriting adminGroup's admin-only gate.
+	adminBills := api.Group("/admin/bills", middleware.RequireAuth(auth.RoleAdmin, auth.RoleSalesStaff))
 	adminHandler.RegisterBillRoutes(adminBills)
 
 	adminReports := adminGroup.Group("/reports")

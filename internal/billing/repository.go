@@ -267,12 +267,13 @@ func (r *Repository) GetByID(ctx context.Context, adminID, id int) (Bill, error)
 
 // Approve marks a pending bill approved/rejected from the Cash Counter, or
 // confirms it once a Razorpay UPI payment has actually been captured.
-func (r *Repository) Approve(ctx context.Context, adminID, id, approvedByAdmin int, mode PaymentMode) (Bill, error) {
+// approvedBy is an admins(id) or a sales_staff(id) depending on approverRole.
+func (r *Repository) Approve(ctx context.Context, adminID, id, approvedBy int, approverRole string, mode PaymentMode) (Bill, error) {
 	row := r.db.QueryRow(ctx, `
-		UPDATE bills SET status = 'approved', payment_mode = $3, approved_by = $4, approved_at = now()
+		UPDATE bills SET status = 'approved', payment_mode = $3, approved_by = $4, approved_by_role = $5, approved_at = now()
 		WHERE admin_id = $1 AND id = $2 AND status = 'pending'
 		RETURNING id
-	`, adminID, id, mode, approvedByAdmin)
+	`, adminID, id, mode, approvedBy, approverRole)
 	var returnedID int
 	if err := row.Scan(&returnedID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -300,11 +301,11 @@ func (r *Repository) UpdatePaymentMode(ctx context.Context, adminID, id int, mod
 	return r.GetByID(ctx, adminID, id)
 }
 
-func (r *Repository) Reject(ctx context.Context, adminID, id, approvedByAdmin int) (Bill, error) {
+func (r *Repository) Reject(ctx context.Context, adminID, id, approvedBy int, approverRole string) (Bill, error) {
 	tag, err := r.db.Exec(ctx, `
-		UPDATE bills SET status = 'rejected', approved_by = $3, approved_at = now()
+		UPDATE bills SET status = 'rejected', approved_by = $3, approved_by_role = $4, approved_at = now()
 		WHERE admin_id = $1 AND id = $2 AND status = 'pending'
-	`, adminID, id, approvedByAdmin)
+	`, adminID, id, approvedBy, approverRole)
 	if err != nil {
 		return Bill{}, err
 	}
