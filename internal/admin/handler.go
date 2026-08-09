@@ -138,7 +138,7 @@ func (h *Handler) approve(c *gin.Context) {
 		return
 	}
 
-	if req.PaymentMode == billing.PaymentCash {
+	if	true {
 		bill, err := h.billing.Approve(c.Request.Context(), claims.AdminID, id, claims.UserID, claims.Role, billing.PaymentCash)
 		if err != nil {
 			respondBillErr(c, err)
