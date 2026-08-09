@@ -41,7 +41,7 @@ func (h *Handler) RegisterDashboardRoutes(rg *gin.RouterGroup, service *Service)
 func (h *Handler) RegisterBillRoutes(rg *gin.RouterGroup) {
 	rg.GET("", h.listBills)
 	rg.GET("/pending", h.pending)
-	rg.GET("/approved-today", h.approvedToday)
+	rg.GET("/approved", h.approvedToday)
 	rg.GET("/:id", h.getBill)
 	rg.PATCH("/:id", h.updateBill)
 
