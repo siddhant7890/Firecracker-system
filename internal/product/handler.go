@@ -52,6 +52,7 @@ func (h *Handler) create(c *gin.Context) {
 	response.OK(c, http.StatusCreated, "product added", p)
 }
 
+
 // bulkUpload handles the "Bulk Upload" spreadsheet: item_code, name,
 // category, hsn_code, unit, gst_percent, price. Existing item codes are
 // updated, new ones are inserted; taxable_value is derived server-side from
