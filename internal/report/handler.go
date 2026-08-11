@@ -59,6 +59,7 @@ func (h *Handler) productWise(c *gin.Context) {
 	response.OK(c, http.StatusOK, "", out)
 }
 
+// download builds the report and streams it as an Excel file.
 func (h *Handler) download(c *gin.Context) {
 	adminID, convErr := strconv.Atoi(c.Query("admin_id"))
 	if convErr != nil {
