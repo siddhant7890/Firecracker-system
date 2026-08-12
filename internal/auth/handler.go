@@ -3,19 +3,33 @@ package auth
 import (
 	"errors"
 	"net/http"
+	"time"
 
+	"salestrack/config"
 	"salestrack/internal/staff"
+	"salestrack/pkg/geo"
 	"salestrack/pkg/response"
 
 	"github.com/gin-gonic/gin"
 )
 
+// istZone is a fixed +5:30 offset rather than time.LoadLocation("Asia/Kolkata")
+// so this doesn't depend on the OS having tzdata installed. IST has no DST,
+// so the fixed offset is always correct.
+var istZone = time.FixedZone("IST", 5*60*60+30*60)
+
+const (
+	salesLoginWindowStartHour = 10 // 10:00 IST
+	salesLoginWindowEndHour   = 19 // 19:00 (7pm) IST
+)
+
 type Handler struct {
-	service *Service
+	service         *Service
+	factoryLocation config.FactoryLocation
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service *Service, factoryLocation config.FactoryLocation) *Handler {
+	return &Handler{service: service, factoryLocation: factoryLocation}
 }
 
 // RegisterAdminRoutes wires the admin (shop owner) auth endpoints.
@@ -66,10 +80,23 @@ func (h *Handler) loginSales(c *gin.Context) {
 		response.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
+
+	// if !withinSalesLoginWindow(time.Now()) {
+	// 	response.Fail(c, http.StatusForbidden, "sales login is only allowed between 10 AM and 7 PM IST")
+	// 	return
+	// }
+
+	if err := geo.CheckWithinRadius(req.Latitude, req.Longitude,
+		h.factoryLocation.Latitude, h.factoryLocation.Longitude,
+		h.factoryLocation.RadiusMeters); err != nil {
+		response.Fail(c, http.StatusForbidden, "you must be at the factory to log in")
+		return
+	}
+
 	member, token, err := h.service.LoginSalesStaff(c.Request.Context(), req)
 	if err != nil {
 		status := http.StatusUnauthorized
-		msg := "mobile number isincorrect"
+		msg := "mobile number is incorrect"
 		if errors.Is(err, staff.ErrInactive) {
 			msg = err.Error()
 		}
@@ -77,4 +104,11 @@ func (h *Handler) loginSales(c *gin.Context) {
 		return
 	}
 	response.OK(c, http.StatusOK, "logged in", LoginResponse{Token: token, Role: RoleSalesStaff, User: member})
+}
+
+// withinSalesLoginWindow reports whether t, in IST, falls within
+// [salesLoginWindowStartHour, salesLoginWindowEndHour).
+func withinSalesLoginWindow(t time.Time) bool {
+	hour := t.In(istZone).Hour()
+	return hour >= salesLoginWindowStartHour && hour < salesLoginWindowEndHour
 }

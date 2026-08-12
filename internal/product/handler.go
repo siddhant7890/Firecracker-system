@@ -31,10 +31,12 @@ func (h *Handler) RegisterAdminRoutes(rg *gin.RouterGroup) {
 	rg.DELETE("/:id", h.delete)
 }
 
-// RegisterSalesRoutes wires the read-only, active-only product picker used
-// by the "New Bill" screen (search + category filter).
+// RegisterSalesRoutes wires the read-only product picker used by the "New
+// Bill" screen (search + category filter), plus the full listing (including
+// inactive products) for sales agents that also need admin-parity visibility.
 func (h *Handler) RegisterSalesRoutes(rg *gin.RouterGroup) {
 	rg.GET("", h.listActive)
+	rg.GET("/all", h.listAll)
 }
 
 func (h *Handler) create(c *gin.Context) {

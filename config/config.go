@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
@@ -18,6 +19,12 @@ type Config struct {
 }
 
 var App Config
+
+type FactoryLocation struct {
+	Latitude     float64
+	Longitude    float64
+	RadiusMeters float64
+}
 
 // Load reads .env (if present) and populates App. Safe to call multiple times.
 func Load() Config {
@@ -39,6 +46,26 @@ func Load() Config {
 	}
 
 	return App
+}
+
+func LoadFactoryLocation() FactoryLocation {
+	lat, err := strconv.ParseFloat(os.Getenv("FACTORY_LATITUDE"), 64)
+	if err != nil {
+		log.Fatalf("invalid or missing FACTORY_LATITUDE: %v", err)
+	}
+	lng, err := strconv.ParseFloat(os.Getenv("FACTORY_LONGITUDE"), 64)
+	if err != nil {
+		log.Fatalf("invalid or missing FACTORY_LONGITUDE: %v", err)
+	}
+
+	radius := 100.0 // sensible default
+	if r := os.Getenv("FACTORY_RADIUS_METERS"); r != "" {
+		if parsed, err := strconv.ParseFloat(r, 64); err == nil {
+			radius = parsed
+		}
+	}
+
+	return FactoryLocation{Latitude: lat, Longitude: lng, RadiusMeters: radius}
 }
 
 func getEnv(key, fallback string) string {

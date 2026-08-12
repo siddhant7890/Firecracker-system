@@ -5,8 +5,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 type Service struct {
@@ -27,25 +25,8 @@ func generateCode() (string, error) {
 	return fmt.Sprintf("%04d", n.Int64()), nil
 }
 
-func hashCode(code string) (string, error) {
-	h, err := bcrypt.GenerateFromPassword([]byte(code), bcrypt.DefaultCost)
-	return string(h), err
-}
-
-func (s *Service) Create(ctx context.Context, adminID int, req CreateStaffRequest) (CreateStaffResponse, error) {
-	// code, err := generateCode()
-	// if err != nil {
-	// 	return CreateStaffResponse{}, err
-	// }
-	hash, err := hashCode(req.LoginCode)
-	if err != nil {
-		return CreateStaffResponse{}, err
-	}
-	created, err := s.repo.Create(ctx, adminID, req.Name, req.MobileNumber, hash)
-	if err != nil {
-		return CreateStaffResponse{}, err
-	}
-	return CreateStaffResponse{SalesStaff: created, LoginCode: req.LoginCode}, nil
+func (s *Service) Create(ctx context.Context, adminID int, req CreateStaffRequest) (SalesStaff, error) {
+	return s.repo.Create(ctx, adminID, req.Name, req.MobileNumber, req.LoginCode)
 }
 
 func (s *Service) List(ctx context.Context, adminID int) ([]SalesStaff, error) {
@@ -57,7 +38,7 @@ func (s *Service) Get(ctx context.Context, adminID, id int) (SalesStaff, error) 
 }
 
 func (s *Service) Update(ctx context.Context, adminID, id int, req UpdateStaffRequest) (SalesStaff, error) {
-	return s.repo.Update(ctx, adminID, id, req.Name, req.MobileNumber)
+	return s.repo.Update(ctx, adminID, id, req.Name, req.MobileNumber, req.LoginCode)
 }
 
 func (s *Service) SetActive(ctx context.Context, adminID, id int, active bool) error {
@@ -74,11 +55,7 @@ func (s *Service) ResetCode(ctx context.Context, adminID, id int) (ResetCodeResp
 	if err != nil {
 		return ResetCodeResponse{}, err
 	}
-	hash, err := hashCode(code)
-	if err != nil {
-		return ResetCodeResponse{}, err
-	}
-	if err := s.repo.ResetCode(ctx, adminID, id, hash); err != nil {
+	if err := s.repo.ResetCode(ctx, adminID, id, code); err != nil {
 		return ResetCodeResponse{}, err
 	}
 	return ResetCodeResponse{LoginCode: code}, nil
@@ -86,14 +63,14 @@ func (s *Service) ResetCode(ctx context.Context, adminID, id int) (ResetCodeResp
 
 // VerifyLogin checks a mobile+code pair at sales-agent login time.
 func (s *Service) VerifyLogin(ctx context.Context, mobile, code string) (SalesStaff, error) {
-	member, hash, err := s.repo.GetByMobile(ctx, mobile)
+	member, err := s.repo.GetByMobile(ctx, mobile)
 	if err != nil {
 		return SalesStaff{}, err
 	}
 	if !member.IsActive {
 		return SalesStaff{}, ErrInactive
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(code)); err != nil {
+	if member.LoginCode != code {
 		return SalesStaff{}, ErrBadCredentials
 	}
 	return member, nil

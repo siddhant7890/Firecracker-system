@@ -2,6 +2,7 @@ package staff
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -46,6 +47,7 @@ func (h *Handler) create(c *gin.Context) {
 }
 
 func (h *Handler) list(c *gin.Context) {
+	fmt.Println("list")
 	claims := authctx.FromContext(c)
 	out, err := h.service.List(c.Request.Context(), claims.AdminID)
 	if err != nil {

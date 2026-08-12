@@ -32,8 +32,10 @@ type AdminLoginRequest struct {
 // SalesLoginRequest matches the mobile login screen: mobile number + the
 // 4-digit code the admin generated for this agent.
 type SalesLoginRequest struct {
-	MobileNumber string `json:"mobile_number" binding:"required"`
-	LoginCode    string `json:"login_code" binding:"required,len=4"`
+	MobileNumber string  `json:"mobile_number" binding:"required"`
+	LoginCode    string  `json:"login_code" binding:"required,len=4"`
+	Latitude     float64 `json:"latitude" binding:"required"`
+	Longitude    float64 `json:"longitude" binding:"required"`
 }
 
 type LoginResponse struct {

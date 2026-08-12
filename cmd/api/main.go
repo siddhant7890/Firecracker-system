@@ -19,6 +19,7 @@ import (
 
 func main() {
 	cfg := config.Load()
+	factoryLocation := config.LoadFactoryLocation()
 
 	db := config.ConnectDB()
 	defer config.CloseDB()
@@ -30,7 +31,7 @@ func main() {
 
 	authRepo := auth.NewRepository(db)
 	authSvc := auth.NewService(authRepo, staffSvc)
-	authHandler := auth.NewHandler(authSvc)
+	authHandler := auth.NewHandler(authSvc, factoryLocation)
 
 	productRepo := product.NewRepository(db)
 	productSvc := product.NewService(productRepo)

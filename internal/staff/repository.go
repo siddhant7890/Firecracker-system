@@ -18,19 +18,19 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) Create(ctx context.Context, adminID int, name, mobile, codeHash string) (SalesStaff, error) {
+func (r *Repository) Create(ctx context.Context, adminID int, name, mobile, code string) (SalesStaff, error) {
 	var s SalesStaff
 	err := r.db.QueryRow(ctx, `
-		INSERT INTO sales_staff (admin_id, name, mobile_number, login_code_hash)
+		INSERT INTO sales_staff (admin_id, name, mobile_number, login_code)
 		VALUES ($1, $2, $3, $4)
-		RETURNING id, admin_id, name, mobile_number, is_active, created_at
-	`, adminID, name, mobile, codeHash).Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.IsActive, &s.CreatedAt)
+		RETURNING id, admin_id, name, mobile_number, login_code, is_active, created_at
+	`, adminID, name, mobile, code).Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.LoginCode, &s.IsActive, &s.CreatedAt)
 	return s, err
 }
 
 func (r *Repository) ListByAdmin(ctx context.Context, adminID int) ([]SalesStaff, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT id, admin_id, name, mobile_number, is_active, created_at, login_code
+		SELECT id, admin_id, name, mobile_number, login_code, is_active, created_at
 		FROM sales_staff WHERE admin_id = $1 ORDER BY created_at DESC
 	`, adminID)
 	if err != nil {
@@ -41,7 +41,7 @@ func (r *Repository) ListByAdmin(ctx context.Context, adminID int) ([]SalesStaff
 	var out []SalesStaff
 	for rows.Next() {
 		var s SalesStaff
-		if err := rows.Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.IsActive, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.LoginCode, &s.IsActive, &s.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, s)
@@ -52,9 +52,9 @@ func (r *Repository) ListByAdmin(ctx context.Context, adminID int) ([]SalesStaff
 func (r *Repository) GetByID(ctx context.Context, adminID, id int) (SalesStaff, error) {
 	var s SalesStaff
 	err := r.db.QueryRow(ctx, `
-		SELECT id, admin_id, name, mobile_number, is_active, created_at
+		SELECT id, admin_id, name, mobile_number, login_code, is_active, created_at
 		FROM sales_staff WHERE admin_id = $1 AND id = $2
-	`, adminID, id).Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.IsActive, &s.CreatedAt)
+	`, adminID, id).Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.LoginCode, &s.IsActive, &s.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return s, ErrNotFound
 	}
@@ -63,28 +63,28 @@ func (r *Repository) GetByID(ctx context.Context, adminID, id int) (SalesStaff, 
 
 // GetByMobile looks a staff member up by mobile number alone (used at login,
 // before we know which shop/admin they belong to).
-func (r *Repository) GetByMobile(ctx context.Context, mobile string) (SalesStaff, string, error) {
+func (r *Repository) GetByMobile(ctx context.Context, mobile string) (SalesStaff, error) {
 	var s SalesStaff
-	var hash string
 	err := r.db.QueryRow(ctx, `
-		SELECT id, admin_id, name, mobile_number, login_code_hash, is_active, created_at
+		SELECT id, admin_id, name, mobile_number, login_code, is_active, created_at
 		FROM sales_staff WHERE mobile_number = $1
-	`, mobile).Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &hash, &s.IsActive, &s.CreatedAt)
+	`, mobile).Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.LoginCode, &s.IsActive, &s.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return s, "", ErrNotFound
+		return s, ErrNotFound
 	}
-	return s, hash, err
+	return s, err
 }
 
-func (r *Repository) Update(ctx context.Context, adminID, id int, name, mobile *string) (SalesStaff, error) {
+func (r *Repository) Update(ctx context.Context, adminID, id int, name, mobile, loginCode *string) (SalesStaff, error) {
 	var s SalesStaff
 	err := r.db.QueryRow(ctx, `
 		UPDATE sales_staff SET
 			name = COALESCE($3, name),
-			mobile_number = COALESCE($4, mobile_number)
+			mobile_number = COALESCE($4, mobile_number),
+			login_code = COALESCE($5, login_code)
 		WHERE admin_id = $1 AND id = $2
-		RETURNING id, admin_id, name, mobile_number, is_active, created_at
-	`, adminID, id, name, mobile).Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.IsActive, &s.CreatedAt)
+		RETURNING id, admin_id, name, mobile_number, login_code, is_active, created_at
+	`, adminID, id, name, mobile, loginCode).Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.LoginCode, &s.IsActive, &s.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return s, ErrNotFound
 	}
@@ -102,8 +102,8 @@ func (r *Repository) SetActive(ctx context.Context, adminID, id int, active bool
 	return nil
 }
 
-func (r *Repository) ResetCode(ctx context.Context, adminID, id int, codeHash string) error {
-	tag, err := r.db.Exec(ctx, `UPDATE sales_staff SET login_code_hash = $3 WHERE admin_id = $1 AND id = $2`, adminID, id, codeHash)
+func (r *Repository) ResetCode(ctx context.Context, adminID, id int, code string) error {
+	tag, err := r.db.Exec(ctx, `UPDATE sales_staff SET login_code = $3 WHERE admin_id = $1 AND id = $2`, adminID, id, code)
 	if err != nil {
 		return err
 	}
