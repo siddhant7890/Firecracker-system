@@ -31,7 +31,7 @@ func (r *Repository) Create(ctx context.Context, adminID int, name, mobile, code
 func (r *Repository) ListByAdmin(ctx context.Context, adminID int) ([]SalesStaff, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT id, admin_id, name, mobile_number, login_code, is_active, created_at
-		FROM sales_staff WHERE admin_id = $1 ORDER BY created_at DESC
+		FROM sales_staff WHERE admin_id = $1  AND is_deleted = false ORDER BY created_at DESC
 	`, adminID)
 	if err != nil {
 		return nil, err
