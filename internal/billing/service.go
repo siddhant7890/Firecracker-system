@@ -135,3 +135,7 @@ func (s *Service) PendingApprovalCount(ctx context.Context, adminID int) (int, e
 func (s *Service) GSTSlabTotals(ctx context.Context, adminID int, from, to time.Time) ([]GSTSlabTotal, error) {
 	return s.repo.GSTSlabTotals(ctx, adminID, from, to)
 }
+
+func (s *Service) ProductSalesTotals(ctx context.Context, adminID int, from, to time.Time) ([]ProductSalesTotal, error) {
+	return s.repo.ProductSalesTotals(ctx, adminID, from, to)
+}

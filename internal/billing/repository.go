@@ -94,12 +94,16 @@ func (r *Repository) Create(ctx context.Context, adminID, salesStaffID int, req 
 	var bill Bill
 	err = tx.QueryRow(ctx, `
 		INSERT INTO bills (admin_id, sales_staff_id, bill_no, financial_year, customer_name, customer_mobile,
+			token_number, number_of_cartoon, gst_number,
 			taxable_amount, cgst_amount, sgst_amount, total_amount, status)
-		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7, $8, $9, $10, 'pending')
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, 0), NULLIF($9, ''), $10, $11, $12, $13, 'pending')
 		RETURNING id, bill_no, financial_year, customer_name, COALESCE(customer_mobile, ''),
+			COALESCE(token_number, ''), COALESCE(number_of_cartoon, 0), COALESCE(gst_number, ''),
 			taxable_amount, cgst_amount, sgst_amount, total_amount, status, whatsapp_sent, created_at
-	`, adminID, salesStaffID, billNo, fy, customerName, req.CustomerMobile, taxableTotal, cgstTotal, sgstTotal, grandTotal).
+	`, adminID, salesStaffID, billNo, fy, customerName, req.CustomerMobile,
+		req.TokenNumber, req.NumberOfCartoon, req.GSTNumber, taxableTotal, cgstTotal, sgstTotal, grandTotal).
 		Scan(&bill.ID, &bill.BillNo, &bill.FinancialYear, &bill.CustomerName, &bill.CustomerMobile,
+			&bill.TokenNumber, &bill.NumberOfCartoon, &bill.GSTNumber,
 			&bill.TaxableAmount, &bill.CGSTAmount, &bill.SGSTAmount, &bill.TotalAmount, &bill.Status, &bill.WhatsappSent, &bill.CreatedAt)
 	if err != nil {
 		return Bill{}, err
@@ -138,7 +142,8 @@ func (r *Repository) Create(ctx context.Context, adminID, salesStaffID int, req 
 
 const billSelectCols = `
 	b.id, b.admin_id, b.sales_staff_id, s.name, b.bill_no, b.financial_year, b.customer_name,
-	COALESCE(b.customer_mobile, ''), b.taxable_amount, b.cgst_amount, b.sgst_amount, b.total_amount,
+	COALESCE(b.customer_mobile, ''), COALESCE(b.token_number, ''), COALESCE(b.number_of_cartoon, 0), COALESCE(b.gst_number, ''),
+	b.taxable_amount, b.cgst_amount, b.sgst_amount, b.total_amount,
 	b.status, b.payment_mode, COALESCE(b.razorpay_order_id, ''), COALESCE(b.razorpay_payment_id, ''),
 	b.whatsapp_sent, b.approved_at, b.created_at,
 	(SELECT COUNT(*) FROM bill_items bi WHERE bi.bill_id = b.id)
@@ -152,7 +157,8 @@ func scanBillRow(row pgx.Row) (Bill, error) {
 	var status string
 	var mode *string
 	err := row.Scan(&b.ID, &b.AdminID, &b.SalesStaffID, &b.SalesStaffName, &b.BillNo, &b.FinancialYear,
-		&b.CustomerName, &b.CustomerMobile, &b.TaxableAmount, &b.CGSTAmount, &b.SGSTAmount, &b.TotalAmount,
+		&b.CustomerName, &b.CustomerMobile, &b.TokenNumber, &b.NumberOfCartoon, &b.GSTNumber,
+		&b.TaxableAmount, &b.CGSTAmount, &b.SGSTAmount, &b.TotalAmount,
 		&status, &mode, &b.RazorpayOrderID, &b.RazorpayPaymentID, &b.WhatsappSent, &b.ApprovedAt, &b.CreatedAt, &b.ItemCount)
 	b.Status = Status(status)
 	if mode != nil {
@@ -224,7 +230,14 @@ func (r *Repository) queryBills(ctx context.Context, query string, args ...any) 
 		}
 		out = append(out, b)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if err := r.attachItems(ctx, out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (r *Repository) GetByID(ctx context.Context, adminID, id int) (Bill, error) {
@@ -238,31 +251,57 @@ func (r *Repository) GetByID(ctx context.Context, adminID, id int) (Bill, error)
 		return b, err
 	}
 
-	rows, err := r.db.Query(ctx, `
-		SELECT id, product_id, product_name, hsn_code, qty, rate, taxable_amount, gst_percent,
-			cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount
-		FROM bill_items WHERE bill_id = $1
-	`, b.ID)
-	if err != nil {
+	bills := []Bill{b}
+	if err := r.attachItems(ctx, bills); err != nil {
 		return b, err
+	}
+	return bills[0], nil
+}
+
+// attachItems batch-fetches bill_items for every bill in the slice (one
+// query, not one per bill) and populates each Bill.Items in place.
+func (r *Repository) attachItems(ctx context.Context, bills []Bill) error {
+	if len(bills) == 0 {
+		return nil
+	}
+	ids := make([]int, len(bills))
+	for i, b := range bills {
+		ids[i] = b.ID
+	}
+
+	rows, err := r.db.Query(ctx, `
+		SELECT bill_id, id, product_id, product_name, hsn_code, qty, rate, taxable_amount, gst_percent,
+			cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount
+		FROM bill_items WHERE bill_id = ANY($1)
+		ORDER BY bill_id, id
+	`, ids)
+	if err != nil {
+		return err
 	}
 	defer rows.Close()
 
-	var items []BillItem
+	itemsByBill := make(map[int][]BillItem)
 	for rows.Next() {
+		var billID int
 		var it BillItem
 		var productID *int
-		if err := rows.Scan(&it.ID, &productID, &it.ProductName, &it.HSNCode, &it.Qty, &it.Rate, &it.TaxableAmount,
+		if err := rows.Scan(&billID, &it.ID, &productID, &it.ProductName, &it.HSNCode, &it.Qty, &it.Rate, &it.TaxableAmount,
 			&it.GSTPercent, &it.CGSTPercent, &it.CGSTAmount, &it.SGSTPercent, &it.SGSTAmount, &it.TotalAmount); err != nil {
-			return b, err
+			return err
 		}
 		if productID != nil {
 			it.ProductID = *productID
 		}
-		items = append(items, it)
+		itemsByBill[billID] = append(itemsByBill[billID], it)
 	}
-	b.Items = items
-	return b, rows.Err()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for i := range bills {
+		bills[i].Items = itemsByBill[bills[i].ID]
+	}
+	return nil
 }
 
 // Approve marks a pending bill approved/rejected from the Cash Counter, or
@@ -442,6 +481,44 @@ func (r *Repository) GSTSlabTotals(ctx context.Context, adminID int, from, to ti
 			return nil, err
 		}
 		out = append(out, g)
+	}
+	return out, rows.Err()
+}
+
+// ProductSalesTotals powers the "Product-wise Sales — this month" dashboard
+// array, grouping sales by product.
+type ProductSalesTotal struct {
+	ProductID   int     `json:"product_id"`
+	ProductName string  `json:"product_name"`
+	QtySold     int     `json:"qty_sold"`
+	SalesTotal  float64 `json:"sales_total"`
+}
+
+func (r *Repository) ProductSalesTotals(ctx context.Context, adminID int, from, to time.Time) ([]ProductSalesTotal, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT bi.product_id, bi.product_name, COALESCE(SUM(bi.qty), 0), COALESCE(SUM(bi.total_amount), 0)
+		FROM bill_items bi
+		JOIN bills b ON b.id = bi.bill_id
+		WHERE b.admin_id = $1 AND b.status != 'rejected' AND b.created_at >= $2 AND b.created_at < $3
+		GROUP BY bi.product_id, bi.product_name
+		ORDER BY SUM(bi.total_amount) DESC
+	`, adminID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []ProductSalesTotal
+	for rows.Next() {
+		var p ProductSalesTotal
+		var productID *int
+		if err := rows.Scan(&productID, &p.ProductName, &p.QtySold, &p.SalesTotal); err != nil {
+			return nil, err
+		}
+		if productID != nil {
+			p.ProductID = *productID
+		}
+		out = append(out, p)
 	}
 	return out, rows.Err()
 }

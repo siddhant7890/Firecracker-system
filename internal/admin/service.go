@@ -54,13 +54,19 @@ func (s *Service) Dashboard(ctx context.Context, adminID int) (DashboardResponse
 		return DashboardResponse{}, err
 	}
 
+	productSales, err := s.billing.ProductSalesTotals(ctx, adminID, monthStart, monthEnd)
+	if err != nil {
+		return DashboardResponse{}, err
+	}
+
 	resp := DashboardResponse{
-		TodaysSales:          today.SalesTotal,
-		BillsGenerated:       today.BillsGenerated,
-		PendingApprovals:     pending,
-		GSTCollectedToday:    today.GSTCollected,
-		RecentBills:          recent,
-		GSTSnapshotThisMonth: gstSnapshot,
+		TodaysSales:           today.SalesTotal,
+		BillsGenerated:        today.BillsGenerated,
+		PendingApprovals:      pending,
+		GSTCollectedToday:     today.GSTCollected,
+		RecentBills:           recent,
+		GSTSnapshotThisMonth:  gstSnapshot,
+		ProductSalesThisMonth: productSales,
 	}
 	if yesterday.SalesTotal > 0 {
 		pct := ((today.SalesTotal - yesterday.SalesTotal) / yesterday.SalesTotal) * 100

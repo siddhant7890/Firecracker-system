@@ -19,27 +19,30 @@ const (
 
 // Bill is one entry in "Bill History" / "Recent Bills" / "Cash Counter".
 type Bill struct {
-	ID                int         `json:"id"`
-	AdminID           int         `json:"-"`
-	SalesStaffID      int         `json:"sales_staff_id"`
-	SalesStaffName    string      `json:"sales_staff_name,omitempty"`
-	BillNo            string      `json:"bill_no"`
-	FinancialYear     string      `json:"financial_year"`
-	CustomerName      string      `json:"customer_name"`
-	CustomerMobile    string      `json:"customer_mobile,omitempty"`
-	TaxableAmount     float64     `json:"taxable_amount"`
-	CGSTAmount        float64     `json:"cgst_amount"`
-	SGSTAmount        float64     `json:"sgst_amount"`
-	TotalAmount       float64     `json:"total_amount"`
-	Status            Status      `json:"status"`
+	ID                int          `json:"id"`
+	AdminID           int          `json:"-"`
+	SalesStaffID      int          `json:"sales_staff_id"`
+	SalesStaffName    string       `json:"sales_staff_name,omitempty"`
+	BillNo            string       `json:"bill_no"`
+	FinancialYear     string       `json:"financial_year"`
+	CustomerName      string       `json:"customer_name"`
+	CustomerMobile    string       `json:"customer_mobile,omitempty"`
+	TokenNumber       string       `json:"token_number,omitempty"`
+	NumberOfCartoon   int          `json:"number_of_cartoon,omitempty"`
+	GSTNumber         string       `json:"gst_number,omitempty"`
+	TaxableAmount     float64      `json:"taxable_amount"`
+	CGSTAmount        float64      `json:"cgst_amount"`
+	SGSTAmount        float64      `json:"sgst_amount"`
+	TotalAmount       float64      `json:"total_amount"`
+	Status            Status       `json:"status"`
 	PaymentMode       *PaymentMode `json:"payment_mode,omitempty"`
-	RazorpayOrderID   string      `json:"razorpay_order_id,omitempty"`
-	RazorpayPaymentID string      `json:"razorpay_payment_id,omitempty"`
-	WhatsappSent      bool        `json:"whatsapp_sent"`
-	ItemCount         int         `json:"item_count"`
-	Items             []BillItem  `json:"items,omitempty"`
-	ApprovedAt        *time.Time  `json:"approved_at,omitempty"`
-	CreatedAt         time.Time   `json:"created_at"`
+	RazorpayOrderID   string       `json:"razorpay_order_id,omitempty"`
+	RazorpayPaymentID string       `json:"razorpay_payment_id,omitempty"`
+	WhatsappSent      bool         `json:"whatsapp_sent"`
+	ItemCount         int          `json:"item_count"`
+	Items             []BillItem   `json:"items,omitempty"`
+	ApprovedAt        *time.Time   `json:"approved_at,omitempty"`
+	CreatedAt         time.Time    `json:"created_at"`
 }
 
 type BillItem struct {
@@ -76,9 +79,12 @@ type CreateBillItemRequest struct {
 }
 
 type CreateBillRequest struct {
-	CustomerName   string                  `json:"customer_name"`
-	CustomerMobile string                  `json:"customer_mobile"`
-	Items          []CreateBillItemRequest `json:"items" binding:"required,min=1,dive"`
+	CustomerName    string                  `json:"customer_name"`
+	CustomerMobile  string                  `json:"customer_mobile"`
+	TokenNumber     string                  `json:"token_number"`
+	NumberOfCartoon int                     `json:"number_of_cartoon" binding:"gte=0"`
+	GSTNumber       string                  `json:"gst_number"`
+	Items           []CreateBillItemRequest `json:"items" binding:"required,min=1,dive"`
 }
 
 type ApproveBillRequest struct {
