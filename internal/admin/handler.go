@@ -120,11 +120,9 @@ func (h *Handler) updateBill(c *gin.Context) {
 	response.OK(c, http.StatusOK, "bill updated", bill)
 }
 
-// approve is the "Cash" / "UPI" tap on Cash Counter. Cash approves the bill
-// immediately. UPI opens a Razorpay order and returns checkout details for
-// the admin webapp to render (QR / Checkout.js) — the bill only flips to
-// "approved" once the payment is actually confirmed, via verifyPayment or
-// the Razorpay webhook.
+// approve is the "Cash" / "UPI" tap on Cash Counter. It approves the bill
+// immediately, recording whichever payment_mode was sent in the request —
+// no Razorpay order/checkout involved.
 func (h *Handler) approve(c *gin.Context) {
 	claims := middleware.FromContext(c)
 	id, err := strconv.Atoi(c.Param("id"))
@@ -138,22 +136,12 @@ func (h *Handler) approve(c *gin.Context) {
 		return
 	}
 
-	if	true {
-		bill, err := h.billing.Approve(c.Request.Context(), claims.AdminID, id, claims.UserID, claims.Role, billing.PaymentCash)
-		if err != nil {
-			respondBillErr(c, err)
-			return
-		}
-		response.OK(c, http.StatusOK, "bill approved (cash)", bill)
-		return
-	}
-
-	order, err := h.payment.CreateOrderForBill(c.Request.Context(), claims.AdminID, id)
+	bill, err := h.billing.Approve(c.Request.Context(), claims.AdminID, id, claims.UserID, claims.Role, req.PaymentMode)
 	if err != nil {
-		response.Fail(c, http.StatusInternalServerError, "could not start UPI payment: "+err.Error())
+		respondBillErr(c, err)
 		return
 	}
-	response.OK(c, http.StatusOK, "scan/pay via UPI to complete this bill", order)
+	response.OK(c, http.StatusOK, "bill approved ("+string(req.PaymentMode)+")", bill)
 }
 
 func (h *Handler) reject(c *gin.Context) {
