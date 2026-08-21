@@ -14,4 +14,5 @@ type DashboardResponse struct {
 	RecentBills           []billing.Bill              `json:"recent_bills"`
 	GSTSnapshotThisMonth  []billing.GSTSlabTotal      `json:"gst_snapshot_this_month"`
 	ProductSalesThisMonth []billing.ProductSalesTotal `json:"product_sales_this_month"`
+	ProductSaleToday      []billing.ProductSalesTotal `json:"product_sale_today"`
 }

@@ -28,11 +28,12 @@ type Bill struct {
 	CustomerName      string       `json:"customer_name"`
 	CustomerMobile    string       `json:"customer_mobile,omitempty"`
 	TokenNumber       string       `json:"token_number,omitempty"`
-	NumberOfCartoon   int          `json:"number_of_cartoon,omitempty"`
+	NumberOfCartoon   int          `json:"number_of_cartoon"`
 	GSTNumber         string       `json:"gst_number,omitempty"`
 	TaxableAmount     float64      `json:"taxable_amount"`
 	CGSTAmount        float64      `json:"cgst_amount"`
 	SGSTAmount        float64      `json:"sgst_amount"`
+	DiscountAmount    float64      `json:"discount_amount"`
 	TotalAmount       float64      `json:"total_amount"`
 	Status            Status       `json:"status"`
 	PaymentMode       *PaymentMode `json:"payment_mode,omitempty"`
@@ -84,6 +85,7 @@ type CreateBillRequest struct {
 	TokenNumber     string                  `json:"token_number"`
 	NumberOfCartoon int                     `json:"number_of_cartoon" binding:"gte=0"`
 	GSTNumber       string                  `json:"gst_number"`
+	DiscountAmount  float64                 `json:"discount_amount" binding:"gte=0"`
 	Items           []CreateBillItemRequest `json:"items" binding:"required,min=1,dive"`
 }
 
@@ -91,8 +93,20 @@ type ApproveBillRequest struct {
 	PaymentMode PaymentMode `json:"payment_mode" binding:"required,oneof=cash upi"`
 }
 
+// UpdateBillRequest lets admin or sales staff correct a bill after it's been
+// created — the payment mode (e.g. cash entered by mistake instead of UPI)
+// and/or its customer/header details (name, mobile, token, carton count, GST
+// number, discount). Every field is optional/partial: omit a field to leave
+// it unchanged. Line items and their GST breakup are not editable here;
+// changing discount_amount recalculates total_amount.
 type UpdateBillRequest struct {
-	PaymentMode PaymentMode `json:"payment_mode" binding:"required,oneof=cash upi"`
+	PaymentMode     *PaymentMode `json:"payment_mode,omitempty" binding:"omitempty,oneof=cash upi"`
+	CustomerName    *string      `json:"customer_name,omitempty"`
+	CustomerMobile  *string      `json:"customer_mobile,omitempty"`
+	TokenNumber     *string      `json:"token_number,omitempty"`
+	NumberOfCartoon *int         `json:"number_of_cartoon,omitempty" binding:"omitempty,gte=0"`
+	GSTNumber       *string      `json:"gst_number,omitempty"`
+	DiscountAmount  *float64     `json:"discount_amount,omitempty" binding:"omitempty,gte=0"`
 }
 
 // DashboardHome matches the mobile "Home" screen for a single sales agent.

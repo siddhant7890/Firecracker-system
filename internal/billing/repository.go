@@ -90,21 +90,23 @@ func (r *Repository) Create(ctx context.Context, adminID, salesStaffID int, req 
 		grandTotal += line.TotalAmount
 	}
 	taxableTotal, cgstTotal, sgstTotal, grandTotal = utils.Round2(taxableTotal), utils.Round2(cgstTotal), utils.Round2(sgstTotal), utils.Round2(grandTotal)
+	discountAmount := utils.Round2(req.DiscountAmount)
+	grandTotal = utils.Round2(grandTotal - discountAmount)
 
 	var bill Bill
 	err = tx.QueryRow(ctx, `
 		INSERT INTO bills (admin_id, sales_staff_id, bill_no, financial_year, customer_name, customer_mobile,
 			token_number, number_of_cartoon, gst_number,
-			taxable_amount, cgst_amount, sgst_amount, total_amount, status)
-		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, 0), NULLIF($9, ''), $10, $11, $12, $13, 'pending')
+			taxable_amount, cgst_amount, sgst_amount, discount_amount, total_amount, status)
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, 0), NULLIF($9, ''), $10, $11, $12, $13, $14, 'pending')
 		RETURNING id, bill_no, financial_year, customer_name, COALESCE(customer_mobile, ''),
 			COALESCE(token_number, ''), COALESCE(number_of_cartoon, 0), COALESCE(gst_number, ''),
-			taxable_amount, cgst_amount, sgst_amount, total_amount, status, whatsapp_sent, created_at
+			taxable_amount, cgst_amount, sgst_amount, discount_amount, total_amount, status, whatsapp_sent, created_at
 	`, adminID, salesStaffID, billNo, fy, customerName, req.CustomerMobile,
-		req.TokenNumber, req.NumberOfCartoon, req.GSTNumber, taxableTotal, cgstTotal, sgstTotal, grandTotal).
+		req.TokenNumber, req.NumberOfCartoon, req.GSTNumber, taxableTotal, cgstTotal, sgstTotal, discountAmount, grandTotal).
 		Scan(&bill.ID, &bill.BillNo, &bill.FinancialYear, &bill.CustomerName, &bill.CustomerMobile,
 			&bill.TokenNumber, &bill.NumberOfCartoon, &bill.GSTNumber,
-			&bill.TaxableAmount, &bill.CGSTAmount, &bill.SGSTAmount, &bill.TotalAmount, &bill.Status, &bill.WhatsappSent, &bill.CreatedAt)
+			&bill.TaxableAmount, &bill.CGSTAmount, &bill.SGSTAmount, &bill.DiscountAmount, &bill.TotalAmount, &bill.Status, &bill.WhatsappSent, &bill.CreatedAt)
 	if err != nil {
 		return Bill{}, err
 	}
@@ -143,7 +145,7 @@ func (r *Repository) Create(ctx context.Context, adminID, salesStaffID int, req 
 const billSelectCols = `
 	b.id, b.admin_id, b.sales_staff_id, s.name, b.bill_no, b.financial_year, b.customer_name,
 	COALESCE(b.customer_mobile, ''), COALESCE(b.token_number, ''), COALESCE(b.number_of_cartoon, 0), COALESCE(b.gst_number, ''),
-	b.taxable_amount, b.cgst_amount, b.sgst_amount, b.total_amount,
+	b.taxable_amount, b.cgst_amount, b.sgst_amount, b.discount_amount, b.total_amount,
 	b.status, b.payment_mode, COALESCE(b.razorpay_order_id, ''), COALESCE(b.razorpay_payment_id, ''),
 	b.whatsapp_sent, b.approved_at, b.created_at,
 	(SELECT COUNT(*) FROM bill_items bi WHERE bi.bill_id = b.id)
@@ -158,7 +160,7 @@ func scanBillRow(row pgx.Row) (Bill, error) {
 	var mode *string
 	err := row.Scan(&b.ID, &b.AdminID, &b.SalesStaffID, &b.SalesStaffName, &b.BillNo, &b.FinancialYear,
 		&b.CustomerName, &b.CustomerMobile, &b.TokenNumber, &b.NumberOfCartoon, &b.GSTNumber,
-		&b.TaxableAmount, &b.CGSTAmount, &b.SGSTAmount, &b.TotalAmount,
+		&b.TaxableAmount, &b.CGSTAmount, &b.SGSTAmount, &b.DiscountAmount, &b.TotalAmount,
 		&status, &mode, &b.RazorpayOrderID, &b.RazorpayPaymentID, &b.WhatsappSent, &b.ApprovedAt, &b.CreatedAt, &b.ItemCount)
 	b.Status = Status(status)
 	if mode != nil {
@@ -327,10 +329,32 @@ func (r *Repository) Approve(ctx context.Context, adminID, id, approvedBy int, a
 	return r.GetByID(ctx, adminID, id)
 }
 
-// UpdatePaymentMode lets the admin correct the payment_mode recorded on a
-// bill (e.g. cash entered by mistake instead of UPI, or vice versa).
-func (r *Repository) UpdatePaymentMode(ctx context.Context, adminID, id int, mode PaymentMode) (Bill, error) {
-	tag, err := r.db.Exec(ctx, `UPDATE bills SET payment_mode = $3 WHERE admin_id = $1 AND id = $2`, adminID, id, mode)
+// UpdateBill lets admin or sales staff correct a bill after it's been
+// created: payment mode (e.g. cash entered by mistake instead of UPI) and/or
+// customer/header details (name, mobile, token, carton count, GST number,
+// discount). Every field in req is a pointer, so a nil one leaves that
+// column unchanged — only the fields the caller actually sent are touched.
+// Line items and their tax breakup are untouched; total_amount is
+// recalculated off the stored taxable/CGST/SGST totals so a changed discount
+// takes effect immediately.
+func (r *Repository) UpdateBill(ctx context.Context, adminID, id int, req UpdateBillRequest) (Bill, error) {
+	var discount *float64
+	if req.DiscountAmount != nil {
+		d := utils.Round2(*req.DiscountAmount)
+		discount = &d
+	}
+	tag, err := r.db.Exec(ctx, `
+		UPDATE bills SET
+			customer_name     = COALESCE($3, customer_name),
+			customer_mobile   = COALESCE($4, customer_mobile),
+			token_number      = COALESCE($5, token_number),
+			number_of_cartoon = COALESCE($6, number_of_cartoon),
+			gst_number        = COALESCE($7, gst_number),
+			discount_amount   = COALESCE($8, discount_amount),
+			total_amount      = taxable_amount + cgst_amount + sgst_amount - COALESCE($8, discount_amount),
+			payment_mode      = COALESCE($9, payment_mode)
+		WHERE admin_id = $1 AND id = $2
+	`, adminID, id, req.CustomerName, req.CustomerMobile, req.TokenNumber, req.NumberOfCartoon, req.GSTNumber, discount, req.PaymentMode)
 	if err != nil {
 		return Bill{}, err
 	}

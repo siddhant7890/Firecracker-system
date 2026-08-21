@@ -98,8 +98,10 @@ func (h *Handler) getBill(c *gin.Context) {
 	response.OK(c, http.StatusOK, "", bill)
 }
 
-// updateBill lets the admin correct a bill's payment_mode after the fact
-// (cash vs UPI), independent of the approve/reject flow.
+// updateBill lets the admin correct a bill after the fact: payment_mode
+// (cash vs UPI), independent of the approve/reject flow, and/or its
+// customer/header fields (name, mobile, token, carton count, GST no.,
+// discount). Every field is optional — only what's sent gets changed.
 func (h *Handler) updateBill(c *gin.Context) {
 	claims := middleware.FromContext(c)
 	id, err := strconv.Atoi(c.Param("id"))

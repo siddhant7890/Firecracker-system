@@ -29,6 +29,7 @@ func (h *Handler) Register(rg *gin.RouterGroup) {
 	rg.POST("/bills", h.createBill)
 	rg.GET("/bills", h.listBills)
 	rg.GET("/bills/:id", h.getBill)
+	rg.PATCH("/bills/:id", h.updateBill)
 	rg.POST("/bills/:id/whatsapp", h.sendWhatsapp)
 }
 
@@ -92,6 +93,34 @@ func (h *Handler) getBill(c *gin.Context) {
 	response.OK(c, http.StatusOK, "", bill)
 }
 
+// updateBill lets a sales agent correct their own bill's customer/header
+// details (name, mobile, token, carton count, GST no., discount) and/or
+// payment mode. Every field is optional — only what's sent gets changed.
+func (h *Handler) updateBill(c *gin.Context) {
+	claims := middleware.FromContext(c)
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, "invalid id")
+		return
+	}
+	existing, err := h.billing.Get(c.Request.Context(), claims.AdminID, id)
+	if err != nil || existing.SalesStaffID != claims.UserID {
+		response.Fail(c, http.StatusNotFound, "bill not found")
+		return
+	}
+	var req billing.UpdateBillRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	bill, err := h.billing.UpdateBill(c.Request.Context(), claims.AdminID, id, req)
+	if err != nil {
+		respondBillErr(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, "bill updated", bill)
+}
+
 // sendWhatsapp builds a wa.me deep link with the bill summary and marks the
 // bill as sent, matching the "Sent on WhatsApp" tag in Bill History.
 func (h *Handler) sendWhatsapp(c *gin.Context) {
@@ -111,4 +140,15 @@ func (h *Handler) sendWhatsapp(c *gin.Context) {
 		return
 	}
 	response.OK(c, http.StatusOK, "ready to send on WhatsApp", WhatsAppLinkResponse{Link: whatsapp.BuildLink(bill)})
+}
+
+func respondBillErr(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, billing.ErrNotFound):
+		response.Fail(c, http.StatusNotFound, "bill not found")
+	case errors.Is(err, billing.ErrAlreadyHandled):
+		response.Fail(c, http.StatusConflict, err.Error())
+	default:
+		response.Fail(c, http.StatusInternalServerError, err.Error())
+	}
 }

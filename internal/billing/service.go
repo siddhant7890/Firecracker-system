@@ -83,7 +83,7 @@ func (s *Service) Approve(ctx context.Context, adminID, id, approvedBy int, appr
 }
 
 func (s *Service) UpdateBill(ctx context.Context, adminID, id int, req UpdateBillRequest) (Bill, error) {
-	return s.repo.UpdatePaymentMode(ctx, adminID, id, req.PaymentMode)
+	return s.repo.UpdateBill(ctx, adminID, id, req)
 }
 
 func (s *Service) Reject(ctx context.Context, adminID, id, approvedBy int, approverRole string) (Bill, error) {
