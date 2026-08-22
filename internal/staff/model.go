@@ -12,20 +12,26 @@ type SalesStaff struct {
 	AdminID      int       `json:"-"`
 	Name         string    `json:"name"`
 	MobileNumber string    `json:"mobile_number"`
+	ShopNumber   string    `json:"shop_number"`
 	LoginCode    string    `json:"login_code"`
 	IsActive     bool      `json:"is_active"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+// ShopNumber identifies which physical shop a staff member sells for. It
+// drives the bill number prefix (see billing.BillPrefixForShop) — each shop
+// runs its own bill sequence.
 type CreateStaffRequest struct {
 	Name         string `json:"name" binding:"required"`
 	MobileNumber string `json:"mobile_number" binding:"required,len=10"`
+	ShopNumber   string `json:"shop_number" binding:"required,oneof=SHOP-AKR SHOP-14-15"`
 	LoginCode    string `json:"login_code" binding:"required,len=4"`
 }
 
 type UpdateStaffRequest struct {
 	Name         *string `json:"name"`
 	MobileNumber *string `json:"mobile_number"`
+	ShopNumber   *string `json:"shop_number" binding:"omitempty,oneof=SHOP-AKR SHOP-14-15"`
 	LoginCode    *string `json:"login_code" binding:"omitempty,len=4"`
 }
 

@@ -26,7 +26,7 @@ func generateCode() (string, error) {
 }
 
 func (s *Service) Create(ctx context.Context, adminID int, req CreateStaffRequest) (SalesStaff, error) {
-	return s.repo.Create(ctx, adminID, req.Name, req.MobileNumber, req.LoginCode)
+	return s.repo.Create(ctx, adminID, req.Name, req.MobileNumber, req.ShopNumber, req.LoginCode)
 }
 
 func (s *Service) List(ctx context.Context, adminID int) ([]SalesStaff, error) {
@@ -38,7 +38,7 @@ func (s *Service) Get(ctx context.Context, adminID, id int) (SalesStaff, error) 
 }
 
 func (s *Service) Update(ctx context.Context, adminID, id int, req UpdateStaffRequest) (SalesStaff, error) {
-	return s.repo.Update(ctx, adminID, id, req.Name, req.MobileNumber, req.LoginCode)
+	return s.repo.Update(ctx, adminID, id, req.Name, req.MobileNumber, req.ShopNumber, req.LoginCode)
 }
 
 func (s *Service) SetActive(ctx context.Context, adminID, id int, active bool) error {

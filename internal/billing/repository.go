@@ -35,7 +35,9 @@ type ProductSnapshot struct {
 }
 
 // Create inserts a bill + its line items atomically, generating the next
-// sequential bill number for the shop (e.g. "SF/26-27/00483").
+// sequential bill number for the staff member's shop (e.g. "SFR/G-0001/26-27").
+// Each shop_number runs its own sequence, so two shops under the same admin
+// both start at G-0001.
 func (r *Repository) Create(ctx context.Context, adminID, salesStaffID int, req CreateBillRequest, products map[int]ProductSnapshot) (Bill, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
@@ -43,24 +45,29 @@ func (r *Repository) Create(ctx context.Context, adminID, salesStaffID int, req 
 	}
 	defer tx.Rollback(ctx)
 
-	var prefix string
-	if err := tx.QueryRow(ctx, `SELECT bill_prefix FROM admins WHERE id = $1`, adminID).Scan(&prefix); err != nil {
-		return Bill{}, fmt.Errorf("shop not found: %w", err)
+	var shopNumber string
+	if err := tx.QueryRow(ctx, `SELECT shop_number FROM sales_staff WHERE id = $1 AND admin_id = $2`, salesStaffID, adminID).Scan(&shopNumber); err != nil {
+		return Bill{}, fmt.Errorf("sales staff not found: %w", err)
+	}
+
+	prefix, err := BillPrefixForShop(shopNumber)
+	if err != nil {
+		return Bill{}, err
 	}
 
 	var seq int
 	err = tx.QueryRow(ctx, `
-		INSERT INTO bill_sequences (admin_id, last_number) VALUES ($1, 1)
-		ON CONFLICT (admin_id) DO UPDATE SET last_number = bill_sequences.last_number + 1
+		INSERT INTO bill_sequences (admin_id, shop_number, last_number) VALUES ($1, $2, 1)
+		ON CONFLICT (admin_id, shop_number) DO UPDATE SET last_number = bill_sequences.last_number + 1
 		RETURNING last_number
-	`, adminID).Scan(&seq)
+	`, adminID, shopNumber).Scan(&seq)
 	if err != nil {
 		return Bill{}, err
 	}
 
 	now := time.Now()
 	fy := utils.FinancialYear(now.Year(), int(now.Month()))
-	billNo := fmt.Sprintf("%s/%s/%05d", prefix, fy, seq)
+	billNo := fmt.Sprintf("%s/G-%04d/%s", prefix, seq, fy)
 
 	customerName := req.CustomerName
 	if customerName == "" {
