@@ -371,9 +371,20 @@ func (r *Repository) UpdateBill(ctx context.Context, adminID, id int, req Update
 	return r.GetByID(ctx, adminID, id)
 }
 
+// Reject marks a pending bill rejected and zeroes out its amounts (both on
+// the bill and its line items) so a rejected bill never contributes value to
+// the bill-wise/product-wise reports — it still appears there (for the
+// audit trail of what was rejected) but with taxable/CGST/SGST/total all 0.
 func (r *Repository) Reject(ctx context.Context, adminID, id, approvedBy int, approverRole string) (Bill, error) {
-	tag, err := r.db.Exec(ctx, `
-		UPDATE bills SET status = 'rejected', approved_by = $3, approved_by_role = $4, approved_at = now()
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return Bill{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx, `
+		UPDATE bills SET status = 'rejected', approved_by = $3, approved_by_role = $4, approved_at = now(),
+			taxable_amount = 0, cgst_amount = 0, sgst_amount = 0, discount_amount = 0, total_amount = 0
 		WHERE admin_id = $1 AND id = $2 AND status = 'pending'
 	`, adminID, id, approvedBy, approverRole)
 	if err != nil {
@@ -381,6 +392,17 @@ func (r *Repository) Reject(ctx context.Context, adminID, id, approvedBy int, ap
 	}
 	if tag.RowsAffected() == 0 {
 		return Bill{}, ErrAlreadyHandled
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE bill_items SET taxable_amount = 0, cgst_amount = 0, sgst_amount = 0, total_amount = 0
+		WHERE bill_id = $1
+	`, id); err != nil {
+		return Bill{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return Bill{}, err
 	}
 	return r.GetByID(ctx, adminID, id)
 }
