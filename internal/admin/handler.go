@@ -99,9 +99,11 @@ func (h *Handler) getBill(c *gin.Context) {
 }
 
 // updateBill lets the admin correct a bill after the fact: payment_mode
-// (cash vs UPI), independent of the approve/reject flow, and/or its
-// customer/header fields (name, mobile, token, carton count, GST no.,
-// discount). Every field is optional — only what's sent gets changed.
+// (cash/upi/cash_upi/credit, with its cash/UPI split via total_cash/
+// total_upi), independent of the approve/reject flow, its customer/header
+// fields (name, mobile, token, carton count, GST no., discount), and/or its
+// line items — sending "items" replaces the whole cart and recalculates the
+// GST breakup. Every field is optional — only what's sent gets changed.
 func (h *Handler) updateBill(c *gin.Context) {
 	claims := middleware.FromContext(c)
 	id, err := strconv.Atoi(c.Param("id"))

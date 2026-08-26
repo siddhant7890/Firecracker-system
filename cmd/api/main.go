@@ -66,6 +66,9 @@ func main() {
 	salesAuth := api.Group("/sales/auth")
 	authHandler.RegisterSalesRoutes(salesAuth)
 
+	cashAuth := api.Group("/cash/auth")
+	authHandler.RegisterCashRoutes(cashAuth)
+
 	// Public payment webhook (authenticated by Razorpay signature, not JWT).
 	payments := api.Group("/payments")
 	paymentHandler.RegisterPublicRoutes(payments)

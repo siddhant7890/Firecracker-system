@@ -33,15 +33,17 @@ func (s *Service) BuildBillWiseExcel(ctx context.Context, adminID int, f Filter)
 	f2 := excelize.NewFile()
 	sheet := "Bill-wise"
 	f2.SetSheetName("Sheet1", sheet)
-	headers := []string{"Date", "Bill No", "Customer Name", "Sales Person", "Items", "Taxable Amt", "CGST Amt", "SGST Amt", "Total Amt", "Status", "Payment Mode"}
+	headers := []string{"Date", "Bill No", "Customer Name", "Item / Particulars", "HSN Code", "Items",
+		"Discount Amt", "Taxable Amt", "CGST Amt", "SGST Amt", "Total Amt", "Total Cash", "Total UPI", "Status", "Payment Mode"}
 	for i, h := range headers {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
 		f2.SetCellValue(sheet, cell, h)
 	}
 	for r, row := range rows {
 		rowNum := r + 2
-		values := []any{row.Date, row.BillNo, row.CustomerName, row.SalesPerson, row.ItemCount,
-			row.TaxableAmount, row.CGSTAmount, row.SGSTAmount, row.TotalAmount, row.Status, row.PaymentMode}
+		values := []any{row.Date, row.BillNo, row.CustomerName, row.ItemName, row.HSNCode, row.ItemCount,
+			row.DiscountAmount, row.TaxableAmount, row.CGSTAmount, row.SGSTAmount, row.TotalAmount,
+			row.TotalCash, row.TotalUPI, row.Status, row.PaymentMode}
 		for i, v := range values {
 			cell, _ := excelize.CoordinatesToCellName(i+1, rowNum)
 			f2.SetCellValue(sheet, cell, v)

@@ -25,9 +25,21 @@ func (s *Service) CreateBill(ctx context.Context, adminID, salesStaffID int, req
 		return Bill{}, ErrEmptyCart
 	}
 
-	ids := make([]int, 0, len(req.Items))
+	snapshots, err := s.resolveProducts(ctx, adminID, req.Items)
+	if err != nil {
+		return Bill{}, err
+	}
+
+	return s.repo.Create(ctx, adminID, salesStaffID, req, snapshots)
+}
+
+// resolveProducts confirms every product_id on a set of bill lines belongs
+// to this shop and is active, and returns a lookup the repository uses to
+// snapshot each line's name/HSN code. Shared by CreateBill and UpdateBill.
+func (s *Service) resolveProducts(ctx context.Context, adminID int, items []CreateBillItemRequest) (map[int]ProductSnapshot, error) {
+	ids := make([]int, 0, len(items))
 	seen := map[int]bool{}
-	for _, it := range req.Items {
+	for _, it := range items {
 		if !seen[it.ProductID] {
 			ids = append(ids, it.ProductID)
 			seen[it.ProductID] = true
@@ -36,18 +48,17 @@ func (s *Service) CreateBill(ctx context.Context, adminID, salesStaffID int, req
 
 	products, err := s.productSvc.GetMany(ctx, adminID, ids)
 	if err != nil {
-		return Bill{}, err
+		return nil, err
 	}
 	snapshots := map[int]ProductSnapshot{}
 	for _, id := range ids {
 		p, ok := products[id]
 		if !ok || !p.IsActive {
-			return Bill{}, fmt.Errorf("product %d is not available", id)
+			return nil, fmt.Errorf("product %d is not available", id)
 		}
 		snapshots[id] = ProductSnapshot{ID: p.ID, Name: p.Name, HSNCode: p.HSNCode}
 	}
-
-	return s.repo.Create(ctx, adminID, salesStaffID, req, snapshots)
+	return snapshots, nil
 }
 
 // ListForStaff serves the "Today / This Week / All" tabs on Bill History.
@@ -83,7 +94,18 @@ func (s *Service) Approve(ctx context.Context, adminID, id, approvedBy int, appr
 }
 
 func (s *Service) UpdateBill(ctx context.Context, adminID, id int, req UpdateBillRequest) (Bill, error) {
-	return s.repo.UpdateBill(ctx, adminID, id, req)
+	var products map[int]ProductSnapshot
+	if req.Items != nil {
+		if len(*req.Items) == 0 {
+			return Bill{}, ErrEmptyCart
+		}
+		var err error
+		products, err = s.resolveProducts(ctx, adminID, *req.Items)
+		if err != nil {
+			return Bill{}, err
+		}
+	}
+	return s.repo.UpdateBill(ctx, adminID, id, req, products)
 }
 
 func (s *Service) Reject(ctx context.Context, adminID, id, approvedBy int, approverRole string) (Bill, error) {

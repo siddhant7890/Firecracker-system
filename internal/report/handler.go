@@ -117,6 +117,9 @@ func parseFilter(c *gin.Context) Filter {
 			f.StaffID = &id
 		}
 	}
+	if b := c.Query("bill_no"); b != "" {
+		f.BillNo = &b
+	}
 	return f
 }
 

@@ -339,13 +339,23 @@ func (r *Repository) Approve(ctx context.Context, adminID, id, approvedBy int, a
 // UpdateBill lets admin or sales staff correct a bill after it's been
 // created: payment mode (e.g. cash entered by mistake instead of UPI), its
 // cash/UPI split (total_cash/total_upi, when payment_mode is "cash_upi"),
-// and/or customer/header details (name, mobile, token, carton count, GST
-// number, discount). Every field in req is a pointer, so a nil one leaves
-// that column unchanged — only the fields the caller actually sent are
-// touched. Line items and their tax breakup are untouched; total_amount is
-// recalculated off the stored taxable/CGST/SGST totals so a changed discount
-// takes effect immediately.
-func (r *Repository) UpdateBill(ctx context.Context, adminID, id int, req UpdateBillRequest) (Bill, error) {
+// customer/header details (name, mobile, token, carton count, GST number,
+// discount), and/or its line items. Every field in req is a pointer, so a
+// nil one leaves that column unchanged — only the fields the caller
+// actually sent are touched. When req.Items is set, products carries the
+// verified product_id -> name/HSN lookup for those lines (resolved by the
+// service layer, same as on create): the bill's existing items are replaced
+// wholesale and taxable/CGST/SGST are recomputed from the new lines. Either
+// way, total_amount is recalculated from the (possibly just-updated)
+// taxable/CGST/SGST/discount so a changed discount or item list takes
+// effect immediately.
+func (r *Repository) UpdateBill(ctx context.Context, adminID, id int, req UpdateBillRequest, products map[int]ProductSnapshot) (Bill, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return Bill{}, err
+	}
+	defer tx.Rollback(ctx)
+
 	var discount, totalCash, totalUPI *float64
 	if req.DiscountAmount != nil {
 		d := utils.Round2(*req.DiscountAmount)
@@ -359,7 +369,32 @@ func (r *Repository) UpdateBill(ctx context.Context, adminID, id int, req Update
 		u := utils.Round2(*req.TotalUPI)
 		totalUPI = &u
 	}
-	tag, err := r.db.Exec(ctx, `
+
+	var taxable, cgst, sgst *float64
+	var newItems []BillItem
+	if req.Items != nil {
+		var taxableTotal, cgstTotal, sgstTotal float64
+		newItems = make([]BillItem, 0, len(*req.Items))
+		for _, line := range *req.Items {
+			p, ok := products[line.ProductID]
+			if !ok {
+				return Bill{}, fmt.Errorf("product %d is not available", line.ProductID)
+			}
+			newItems = append(newItems, BillItem{
+				ProductID: p.ID, ProductName: p.Name, HSNCode: p.HSNCode, Qty: line.Qty,
+				Rate: line.Rate, TaxableAmount: line.TaxableAmount, GSTPercent: line.GSTPercent,
+				CGSTPercent: line.CGSTPercent, CGSTAmount: line.CGSTAmount,
+				SGSTPercent: line.SGSTPercent, SGSTAmount: line.SGSTAmount, TotalAmount: line.TotalAmount,
+			})
+			taxableTotal += line.TaxableAmount
+			cgstTotal += line.CGSTAmount
+			sgstTotal += line.SGSTAmount
+		}
+		taxableTotal, cgstTotal, sgstTotal = utils.Round2(taxableTotal), utils.Round2(cgstTotal), utils.Round2(sgstTotal)
+		taxable, cgst, sgst = &taxableTotal, &cgstTotal, &sgstTotal
+	}
+
+	tag, err := tx.Exec(ctx, `
 		UPDATE bills SET
 			customer_name     = COALESCE($3, customer_name),
 			customer_mobile   = COALESCE($4, customer_mobile),
@@ -367,25 +402,60 @@ func (r *Repository) UpdateBill(ctx context.Context, adminID, id int, req Update
 			number_of_cartoon = COALESCE($6, number_of_cartoon),
 			gst_number        = COALESCE($7, gst_number),
 			discount_amount   = COALESCE($8, discount_amount),
-			total_amount      = taxable_amount + cgst_amount + sgst_amount - COALESCE($8, discount_amount),
-			payment_mode      = COALESCE($9, payment_mode),
-			total_cash        = COALESCE($10, total_cash),
-			total_upi         = COALESCE($11, total_upi)
+			taxable_amount    = COALESCE($9, taxable_amount),
+			cgst_amount       = COALESCE($10, cgst_amount),
+			sgst_amount       = COALESCE($11, sgst_amount),
+			total_amount      = COALESCE($9, taxable_amount) + COALESCE($10, cgst_amount) + COALESCE($11, sgst_amount) - COALESCE($8, discount_amount),
+			payment_mode      = COALESCE($12, payment_mode),
+			total_cash        = COALESCE($13, total_cash),
+			total_upi         = COALESCE($14, total_upi)
 		WHERE admin_id = $1 AND id = $2
-	`, adminID, id, req.CustomerName, req.CustomerMobile, req.TokenNumber, req.NumberOfCartoon, req.GSTNumber, discount, req.PaymentMode, totalCash, totalUPI)
+	`, adminID, id, req.CustomerName, req.CustomerMobile, req.TokenNumber, req.NumberOfCartoon, req.GSTNumber,
+		discount, taxable, cgst, sgst, req.PaymentMode, totalCash, totalUPI)
 	if err != nil {
 		return Bill{}, err
 	}
 	if tag.RowsAffected() == 0 {
 		return Bill{}, ErrNotFound
 	}
+
+	if req.Items != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM bill_items WHERE bill_id = $1`, id); err != nil {
+			return Bill{}, err
+		}
+		batch := &pgx.Batch{}
+		for _, it := range newItems {
+			batch.Queue(`
+				INSERT INTO bill_items (bill_id, product_id, product_name, hsn_code, qty, rate, taxable_amount,
+					gst_percent, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount)
+				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+			`, id, it.ProductID, it.ProductName, it.HSNCode, it.Qty, it.Rate, it.TaxableAmount,
+				it.GSTPercent, it.CGSTPercent, it.CGSTAmount, it.SGSTPercent, it.SGSTAmount, it.TotalAmount)
+		}
+		br := tx.SendBatch(ctx, batch)
+		for range newItems {
+			if _, err := br.Exec(); err != nil {
+				br.Close()
+				return Bill{}, err
+			}
+		}
+		if err := br.Close(); err != nil {
+			return Bill{}, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return Bill{}, err
+	}
 	return r.GetByID(ctx, adminID, id)
 }
 
-// Reject marks a pending bill rejected and zeroes out its amounts (both on
-// the bill and its line items) so a rejected bill never contributes value to
-// the bill-wise/product-wise reports — it still appears there (for the
-// audit trail of what was rejected) but with taxable/CGST/SGST/total all 0.
+// Reject marks a pending bill rejected and zeroes out its amounts — on the
+// bill (taxable/CGST/SGST/discount/total, plus total_cash/total_upi, which
+// UpdateBill can set independent of status) and on its line items — so a
+// rejected bill never contributes value to the bill-wise/product-wise
+// reports. It still appears there (for the audit trail of what was
+// rejected) but with every money column at 0.
 func (r *Repository) Reject(ctx context.Context, adminID, id, approvedBy int, approverRole string) (Bill, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
@@ -395,7 +465,8 @@ func (r *Repository) Reject(ctx context.Context, adminID, id, approvedBy int, ap
 
 	tag, err := tx.Exec(ctx, `
 		UPDATE bills SET status = 'rejected', approved_by = $3, approved_by_role = $4, approved_at = now(),
-			taxable_amount = 0, cgst_amount = 0, sgst_amount = 0, discount_amount = 0, total_amount = 0
+			taxable_amount = 0, cgst_amount = 0, sgst_amount = 0, discount_amount = 0, total_amount = 0,
+			total_cash = 0, total_upi = 0
 		WHERE admin_id = $1 AND id = $2 AND status = 'pending'
 	`, adminID, id, approvedBy, approverRole)
 	if err != nil {
@@ -463,9 +534,9 @@ func (r *Repository) MarkWhatsappSent(ctx context.Context, adminID, id int) erro
 // DashboardStats powers both the sales-agent Home screen and the admin
 // "Today's overview" tiles.
 type DashboardStats struct {
-	BillsCount  int
-	SalesTotal  float64
-	GSTTotal    float64
+	BillsCount   int
+	SalesTotal   float64
+	GSTTotal     float64
 	PendingCount int
 }
 

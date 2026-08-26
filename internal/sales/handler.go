@@ -94,8 +94,10 @@ func (h *Handler) getBill(c *gin.Context) {
 }
 
 // updateBill lets a sales agent correct their own bill's customer/header
-// details (name, mobile, token, carton count, GST no., discount) and/or
-// payment mode. Every field is optional — only what's sent gets changed.
+// details (name, mobile, token, carton count, GST no., discount), payment
+// mode (with its cash/UPI split via total_cash/total_upi), and/or its line
+// items — sending "items" replaces the whole cart and recalculates the GST
+// breakup. Every field is optional — only what's sent gets changed.
 func (h *Handler) updateBill(c *gin.Context) {
 	claims := middleware.FromContext(c)
 	id, err := strconv.Atoi(c.Param("id"))

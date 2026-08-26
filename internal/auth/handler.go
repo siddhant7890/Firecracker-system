@@ -43,6 +43,13 @@ func (h *Handler) RegisterSalesRoutes(rg *gin.RouterGroup) {
 	rg.POST("/login", h.loginSales)
 }
 
+// RegisterCashRoutes wires the cash-counter agent auth endpoint. Separate
+// URL from the sales-agent login, but otherwise identical behavior/authority
+// — see auth.Service.LoginCashAgent.
+func (h *Handler) RegisterCashRoutes(rg *gin.RouterGroup) {
+	rg.POST("/login", h.loginCash)
+}
+
 // registerAdmin bootstraps a new shop + its first admin login. There's no
 // screen for this in the design (only staff logins are admin-created), so
 // it's meant to be called once, directly, when setting up a new shop.
@@ -94,6 +101,37 @@ func (h *Handler) loginSales(c *gin.Context) {
 	}
 
 	member, token, err := h.service.LoginSalesStaff(c.Request.Context(), req)
+	if err != nil {
+		status := http.StatusUnauthorized
+		msg := "mobile number is incorrect"
+		if errors.Is(err, staff.ErrInactive) {
+			msg = err.Error()
+		}
+		response.Fail(c, status, msg)
+		return
+	}
+	response.OK(c, http.StatusOK, "logged in", LoginResponse{Token: token, Role: RoleSalesStaff, User: member})
+}
+
+// loginCash is the cash-counter agent's own login endpoint — same mobile +
+// 4-digit code + factory-radius check as loginSales, but only accounts
+// created with role "cash_agent" are accepted (see auth.Service.LoginCashAgent).
+// Resulting token/role/authority are identical to a sales-agent login.
+func (h *Handler) loginCash(c *gin.Context) {
+	var req SalesLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if err := geo.CheckWithinRadius(req.Latitude, req.Longitude,
+		h.factoryLocation.Latitude, h.factoryLocation.Longitude,
+		h.factoryLocation.RadiusMeters); err != nil {
+		response.Fail(c, http.StatusForbidden, "you must be at the factory to log in")
+		return
+	}
+
+	member, token, err := h.service.LoginCashAgent(c.Request.Context(), req)
 	if err != nil {
 		status := http.StatusUnauthorized
 		msg := "mobile number is incorrect"

@@ -99,21 +99,26 @@ type ApproveBillRequest struct {
 
 // UpdateBillRequest lets admin or sales staff correct a bill after it's been
 // created — the payment mode (e.g. cash entered by mistake instead of UPI),
-// its cash/UPI split (when payment_mode is "cash_upi"), and/or its
-// customer/header details (name, mobile, token, carton count, GST number,
-// discount). Every field is optional/partial: omit a field to leave it
-// unchanged. Line items and their GST breakup are not editable here;
-// changing discount_amount recalculates total_amount.
+// its cash/UPI split (when payment_mode is "cash_upi"), its customer/header
+// details (name, mobile, token, carton count, GST number, discount), and/or
+// its line items. Every field is optional/partial: omit a field to leave it
+// unchanged. Items is a pointer so it can distinguish "not sent" (leave
+// items as-is) from "sent as an empty list" (rejected — a bill can't have
+// zero items); when sent, the whole item list is replaced and
+// taxable/CGST/SGST/total are recalculated from it exactly like on create.
+// Changing discount_amount (with or without new items) also recalculates
+// total_amount.
 type UpdateBillRequest struct {
-	PaymentMode     *PaymentMode `json:"payment_mode,omitempty" binding:"omitempty,oneof=cash upi cash_upi credit"`
-	TotalCash       *float64     `json:"total_cash,omitempty" binding:"omitempty,gte=0"`
-	TotalUPI        *float64     `json:"total_upi,omitempty" binding:"omitempty,gte=0"`
-	CustomerName    *string      `json:"customer_name,omitempty"`
-	CustomerMobile  *string      `json:"customer_mobile,omitempty"`
-	TokenNumber     *string      `json:"token_number,omitempty"`
-	NumberOfCartoon *int         `json:"number_of_cartoon,omitempty" binding:"omitempty,gte=0"`
-	GSTNumber       *string      `json:"gst_number,omitempty"`
-	DiscountAmount  *float64     `json:"discount_amount,omitempty" binding:"omitempty,gte=0"`
+	PaymentMode     *PaymentMode             `json:"payment_mode,omitempty" binding:"omitempty,oneof=cash upi cash_upi credit"`
+	TotalCash       *float64                 `json:"total_cash,omitempty" binding:"omitempty,gte=0"`
+	TotalUPI        *float64                 `json:"total_upi,omitempty" binding:"omitempty,gte=0"`
+	CustomerName    *string                  `json:"customer_name,omitempty"`
+	CustomerMobile  *string                  `json:"customer_mobile,omitempty"`
+	TokenNumber     *string                  `json:"token_number,omitempty"`
+	NumberOfCartoon *int                     `json:"number_of_cartoon,omitempty" binding:"omitempty,gte=0"`
+	GSTNumber       *string                  `json:"gst_number,omitempty"`
+	DiscountAmount  *float64                 `json:"discount_amount,omitempty" binding:"omitempty,gte=0"`
+	Items           *[]CreateBillItemRequest `json:"items,omitempty" binding:"omitempty,dive"`
 }
 
 // DashboardHome matches the mobile "Home" screen for a single sales agent.
