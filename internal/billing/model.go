@@ -13,8 +13,10 @@ const (
 type PaymentMode string
 
 const (
-	PaymentCash PaymentMode = "cash"
-	PaymentUPI  PaymentMode = "upi"
+	PaymentCash    PaymentMode = "cash"
+	PaymentUPI     PaymentMode = "upi"
+	PaymentCashUPI PaymentMode = "cash_upi"
+	PaymentCredit  PaymentMode = "credit"
 )
 
 // Bill is one entry in "Bill History" / "Recent Bills" / "Cash Counter".
@@ -37,6 +39,8 @@ type Bill struct {
 	TotalAmount       float64      `json:"total_amount"`
 	Status            Status       `json:"status"`
 	PaymentMode       *PaymentMode `json:"payment_mode,omitempty"`
+	TotalCash         *float64     `json:"total_cash,omitempty"`
+	TotalUPI          *float64     `json:"total_upi,omitempty"`
 	RazorpayOrderID   string       `json:"razorpay_order_id,omitempty"`
 	RazorpayPaymentID string       `json:"razorpay_payment_id,omitempty"`
 	WhatsappSent      bool         `json:"whatsapp_sent"`
@@ -90,17 +94,20 @@ type CreateBillRequest struct {
 }
 
 type ApproveBillRequest struct {
-	PaymentMode PaymentMode `json:"payment_mode" binding:"required,oneof=cash upi"`
+	PaymentMode PaymentMode `json:"payment_mode" binding:"required,oneof=cash upi cash_upi credit"`
 }
 
 // UpdateBillRequest lets admin or sales staff correct a bill after it's been
-// created — the payment mode (e.g. cash entered by mistake instead of UPI)
-// and/or its customer/header details (name, mobile, token, carton count, GST
-// number, discount). Every field is optional/partial: omit a field to leave
-// it unchanged. Line items and their GST breakup are not editable here;
+// created — the payment mode (e.g. cash entered by mistake instead of UPI),
+// its cash/UPI split (when payment_mode is "cash_upi"), and/or its
+// customer/header details (name, mobile, token, carton count, GST number,
+// discount). Every field is optional/partial: omit a field to leave it
+// unchanged. Line items and their GST breakup are not editable here;
 // changing discount_amount recalculates total_amount.
 type UpdateBillRequest struct {
-	PaymentMode     *PaymentMode `json:"payment_mode,omitempty" binding:"omitempty,oneof=cash upi"`
+	PaymentMode     *PaymentMode `json:"payment_mode,omitempty" binding:"omitempty,oneof=cash upi cash_upi credit"`
+	TotalCash       *float64     `json:"total_cash,omitempty" binding:"omitempty,gte=0"`
+	TotalUPI        *float64     `json:"total_upi,omitempty" binding:"omitempty,gte=0"`
 	CustomerName    *string      `json:"customer_name,omitempty"`
 	CustomerMobile  *string      `json:"customer_mobile,omitempty"`
 	TokenNumber     *string      `json:"token_number,omitempty"`

@@ -153,7 +153,7 @@ const billSelectCols = `
 	b.id, b.admin_id, b.sales_staff_id, s.name, b.bill_no, b.financial_year, b.customer_name,
 	COALESCE(b.customer_mobile, ''), COALESCE(b.token_number, ''), COALESCE(b.number_of_cartoon, 0), COALESCE(b.gst_number, ''),
 	b.taxable_amount, b.cgst_amount, b.sgst_amount, b.discount_amount, b.total_amount,
-	b.status, b.payment_mode, COALESCE(b.razorpay_order_id, ''), COALESCE(b.razorpay_payment_id, ''),
+	b.status, b.payment_mode, b.total_cash, b.total_upi, COALESCE(b.razorpay_order_id, ''), COALESCE(b.razorpay_payment_id, ''),
 	b.whatsapp_sent, b.approved_at, b.created_at,
 	(SELECT COUNT(*) FROM bill_items bi WHERE bi.bill_id = b.id)
 `
@@ -168,7 +168,7 @@ func scanBillRow(row pgx.Row) (Bill, error) {
 	err := row.Scan(&b.ID, &b.AdminID, &b.SalesStaffID, &b.SalesStaffName, &b.BillNo, &b.FinancialYear,
 		&b.CustomerName, &b.CustomerMobile, &b.TokenNumber, &b.NumberOfCartoon, &b.GSTNumber,
 		&b.TaxableAmount, &b.CGSTAmount, &b.SGSTAmount, &b.DiscountAmount, &b.TotalAmount,
-		&status, &mode, &b.RazorpayOrderID, &b.RazorpayPaymentID, &b.WhatsappSent, &b.ApprovedAt, &b.CreatedAt, &b.ItemCount)
+		&status, &mode, &b.TotalCash, &b.TotalUPI, &b.RazorpayOrderID, &b.RazorpayPaymentID, &b.WhatsappSent, &b.ApprovedAt, &b.CreatedAt, &b.ItemCount)
 	b.Status = Status(status)
 	if mode != nil {
 		pm := PaymentMode(*mode)
@@ -337,18 +337,27 @@ func (r *Repository) Approve(ctx context.Context, adminID, id, approvedBy int, a
 }
 
 // UpdateBill lets admin or sales staff correct a bill after it's been
-// created: payment mode (e.g. cash entered by mistake instead of UPI) and/or
-// customer/header details (name, mobile, token, carton count, GST number,
-// discount). Every field in req is a pointer, so a nil one leaves that
-// column unchanged — only the fields the caller actually sent are touched.
-// Line items and their tax breakup are untouched; total_amount is
+// created: payment mode (e.g. cash entered by mistake instead of UPI), its
+// cash/UPI split (total_cash/total_upi, when payment_mode is "cash_upi"),
+// and/or customer/header details (name, mobile, token, carton count, GST
+// number, discount). Every field in req is a pointer, so a nil one leaves
+// that column unchanged — only the fields the caller actually sent are
+// touched. Line items and their tax breakup are untouched; total_amount is
 // recalculated off the stored taxable/CGST/SGST totals so a changed discount
 // takes effect immediately.
 func (r *Repository) UpdateBill(ctx context.Context, adminID, id int, req UpdateBillRequest) (Bill, error) {
-	var discount *float64
+	var discount, totalCash, totalUPI *float64
 	if req.DiscountAmount != nil {
 		d := utils.Round2(*req.DiscountAmount)
 		discount = &d
+	}
+	if req.TotalCash != nil {
+		c := utils.Round2(*req.TotalCash)
+		totalCash = &c
+	}
+	if req.TotalUPI != nil {
+		u := utils.Round2(*req.TotalUPI)
+		totalUPI = &u
 	}
 	tag, err := r.db.Exec(ctx, `
 		UPDATE bills SET
@@ -359,9 +368,11 @@ func (r *Repository) UpdateBill(ctx context.Context, adminID, id int, req Update
 			gst_number        = COALESCE($7, gst_number),
 			discount_amount   = COALESCE($8, discount_amount),
 			total_amount      = taxable_amount + cgst_amount + sgst_amount - COALESCE($8, discount_amount),
-			payment_mode      = COALESCE($9, payment_mode)
+			payment_mode      = COALESCE($9, payment_mode),
+			total_cash        = COALESCE($10, total_cash),
+			total_upi         = COALESCE($11, total_upi)
 		WHERE admin_id = $1 AND id = $2
-	`, adminID, id, req.CustomerName, req.CustomerMobile, req.TokenNumber, req.NumberOfCartoon, req.GSTNumber, discount, req.PaymentMode)
+	`, adminID, id, req.CustomerName, req.CustomerMobile, req.TokenNumber, req.NumberOfCartoon, req.GSTNumber, discount, req.PaymentMode, totalCash, totalUPI)
 	if err != nil {
 		return Bill{}, err
 	}

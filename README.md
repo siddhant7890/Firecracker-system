@@ -61,7 +61,7 @@ screen alongside their mobile number.
 | Product Management | `GET/POST/PUT/DELETE /api/admin/products` + `PATCH /:id/status` |
 | User Management | `GET/POST/PUT/DELETE /api/admin/staff` + `PATCH /:id/status`, `POST /:id/reset-code` |
 | Cash Counter — pending approvals | `GET /api/admin/bills/pending` |
-| Cash Counter — approve (Cash / UPI) | `POST /api/admin/bills/:id/approve {"payment_mode":"cash"\|"upi"}` |
+| Cash Counter — approve (Cash / UPI / Cash+UPI / Credit) | `POST /api/admin/bills/:id/approve {"payment_mode":"cash"\|"upi"\|"cash_upi"\|"credit"}` |
 | Report Management — Bill-wise | `GET /api/admin/reports/bills?from=&to=&staff_id=` |
 | Report Management — Product-wise | `GET /api/admin/reports/products?from=&to=&staff_id=` |
 | Report Management — Download Excel | `GET /api/admin/reports/download?type=bill\|product&from=&to=&staff_id=` |
