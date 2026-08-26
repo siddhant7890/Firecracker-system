@@ -7,9 +7,9 @@ import "fmt"
 func BillPrefixForShop(shopNumber string) (string, error) {
 	switch shopNumber {
 	case "SHOP-AKR":
-		return "SFR", nil
-	case "SHOP-14-15":
 		return "SFA", nil
+	case "SHOP-14-15":
+		return "SFR", nil
 	default:
 		return "", fmt.Errorf("unknown shop number %q", shopNumber)
 	}

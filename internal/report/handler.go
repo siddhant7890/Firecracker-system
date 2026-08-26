@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"salestrack/internal/billing"
 	"salestrack/internal/middleware"
 	"salestrack/pkg/response"
 
@@ -120,7 +121,19 @@ func parseFilter(c *gin.Context) Filter {
 	if b := c.Query("bill_no"); b != "" {
 		f.BillNo = &b
 	}
+	if pm := c.Query("payment_mode"); isValidPaymentMode(pm) {
+		f.PaymentMode = &pm
+	}
 	return f
+}
+
+func isValidPaymentMode(pm string) bool {
+	switch billing.PaymentMode(pm) {
+	case billing.PaymentCash, billing.PaymentUPI, billing.PaymentCashUPI, billing.PaymentCredit:
+		return true
+	default:
+		return false
+	}
 }
 
 // parsePaging reads "start" and "limit" query params. start defaults to 0;
