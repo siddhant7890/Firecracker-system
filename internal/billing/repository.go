@@ -35,7 +35,7 @@ type ProductSnapshot struct {
 }
 
 // Create inserts a bill + its line items atomically, generating the next
-// sequential bill number for the staff member's shop (e.g. "SFR/G-0001/26-27").
+// sequential bill number for the staff member's shop (e.g. "SF/A-0001/26-27").
 // Each shop_number runs its own sequence, so two shops under the same admin
 // both start at G-0001.
 func (r *Repository) Create(ctx context.Context, adminID, salesStaffID int, req CreateBillRequest, products map[int]ProductSnapshot) (Bill, error) {
@@ -67,7 +67,7 @@ func (r *Repository) Create(ctx context.Context, adminID, salesStaffID int, req 
 
 	now := time.Now()
 	fy := utils.FinancialYear(now.Year(), int(now.Month()))
-	billNo := fmt.Sprintf("%s/G-%04d/%s", prefix, seq, fy)
+	billNo := fmt.Sprintf("%s-%04d/%s", prefix, seq, fy)
 
 	customerName := req.CustomerName
 	if customerName == "" {
@@ -654,6 +654,40 @@ func (r *Repository) ProductSalesTotals(ctx context.Context, adminID int, from, 
 			p.ProductID = *productID
 		}
 		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// SalesByAgentTotals powers the "Sales by Agent" dashboard array, grouping
+// approved/pending sales by the sales agent who created the bill.
+type SalesByAgentTotal struct {
+	StaffID        int     `json:"staff_id"`
+	StaffName      string  `json:"staff_name"`
+	BillsGenerated int     `json:"bills_generated"`
+	SalesTotal     float64 `json:"sales_total"`
+}
+
+func (r *Repository) SalesByAgentTotals(ctx context.Context, adminID int, from, to time.Time) ([]SalesByAgentTotal, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT b.sales_staff_id, s.name, COUNT(*), COALESCE(SUM(b.total_amount), 0)
+		FROM bills b
+		JOIN sales_staff s ON s.id = b.sales_staff_id
+		WHERE b.admin_id = $1 AND b.status != 'rejected' AND b.created_at >= $2 AND b.created_at < $3
+		GROUP BY b.sales_staff_id, s.name
+		ORDER BY SUM(b.total_amount) DESC
+	`, adminID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []SalesByAgentTotal
+	for rows.Next() {
+		var a SalesByAgentTotal
+		if err := rows.Scan(&a.StaffID, &a.StaffName, &a.BillsGenerated, &a.SalesTotal); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
 	}
 	return out, rows.Err()
 }

@@ -15,4 +15,5 @@ type DashboardResponse struct {
 	GSTSnapshotThisMonth  []billing.GSTSlabTotal      `json:"gst_snapshot_this_month"`
 	ProductSalesThisMonth []billing.ProductSalesTotal `json:"product_sales_this_month"`
 	ProductSaleToday      []billing.ProductSalesTotal `json:"product_sale_today"`
+	SalesByAgent          []billing.SalesByAgentTotal `json:"sales_by_agent"`
 }

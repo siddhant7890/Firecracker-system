@@ -20,7 +20,11 @@ func dayBounds(t time.Time) (time.Time, time.Time) {
 	return start, start.AddDate(0, 0, 1)
 }
 
-func (s *Service) Dashboard(ctx context.Context, adminID int) (DashboardResponse, error) {
+// Dashboard builds the admin "Today's overview" screen. saleAgentStart and
+// saleAgentEnd are the optional start_date/end_date query params (inclusive
+// calendar dates) — when both are given, sales_by_agent is filtered to that
+// range instead of the current calendar month.
+func (s *Service) Dashboard(ctx context.Context, adminID int, saleAgentStart, saleAgentEnd *time.Time) (DashboardResponse, error) {
 	now := time.Now()
 	todayStart, todayEnd := dayBounds(now)
 	yesterdayStart, yesterdayEnd := dayBounds(now.AddDate(0, 0, -1))
@@ -64,6 +68,16 @@ func (s *Service) Dashboard(ctx context.Context, adminID int) (DashboardResponse
 		return DashboardResponse{}, err
 	}
 
+	agentFrom, agentTo := monthStart, monthEnd
+	if saleAgentStart != nil && saleAgentEnd != nil {
+		agentFrom = *saleAgentStart
+		agentTo = saleAgentEnd.AddDate(0, 0, 1)
+	}
+	salesByAgent, err := s.billing.SalesByAgentTotals(ctx, adminID, agentFrom, agentTo)
+	if err != nil {
+		return DashboardResponse{}, err
+	}
+
 	resp := DashboardResponse{
 		TodaysSales:           today.SalesTotal,
 		BillsGenerated:        today.BillsGenerated,
@@ -73,6 +87,7 @@ func (s *Service) Dashboard(ctx context.Context, adminID int) (DashboardResponse
 		GSTSnapshotThisMonth:  gstSnapshot,
 		ProductSalesThisMonth: productSales,
 		ProductSaleToday:      productSalesToday,
+		SalesByAgent:          salesByAgent,
 	}
 	if yesterday.SalesTotal > 0 {
 		pct := ((today.SalesTotal - yesterday.SalesTotal) / yesterday.SalesTotal) * 100

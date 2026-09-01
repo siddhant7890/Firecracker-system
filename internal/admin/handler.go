@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"salestrack/internal/billing"
 	"salestrack/internal/middleware"
@@ -28,13 +29,37 @@ func NewHandler(billingSvc *billing.Service, paymentSvc *payment.Service) *Handl
 func (h *Handler) RegisterDashboardRoutes(rg *gin.RouterGroup, service *Service) {
 	rg.GET("/dashboard", func(c *gin.Context) {
 		claims := middleware.FromContext(c)
-		out, err := service.Dashboard(c.Request.Context(), claims.AdminID)
+		saleAgentStart, err := parseDateParam(c, "start_date")
+		if err != nil {
+			response.Fail(c, http.StatusBadRequest, "invalid start_date, expected YYYY-MM-DD")
+			return
+		}
+		saleAgentEnd, err := parseDateParam(c, "end_date")
+		if err != nil {
+			response.Fail(c, http.StatusBadRequest, "invalid end_date, expected YYYY-MM-DD")
+			return
+		}
+		out, err := service.Dashboard(c.Request.Context(), claims.AdminID, saleAgentStart, saleAgentEnd)
 		if err != nil {
 			response.Fail(c, http.StatusInternalServerError, "could not load dashboard")
 			return
 		}
 		response.OK(c, http.StatusOK, "", out)
 	})
+}
+
+// parseDateParam reads an optional YYYY-MM-DD query param, returning nil if
+// it wasn't sent.
+func parseDateParam(c *gin.Context, name string) (*time.Time, error) {
+	s := c.Query(name)
+	if s == "" {
+		return nil, nil
+	}
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
 }
 
 // RegisterBillRoutes wires "Cash Counter — bill approvals".
