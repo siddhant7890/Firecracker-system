@@ -199,8 +199,8 @@ func (r *Repository) SetActive(ctx context.Context, adminID, id int, active bool
 }
 
 func (r *Repository) Delete(ctx context.Context, adminID, id int) error {
-	tag, err := r.db.Exec(ctx, `UPDATE products 
-     SET is_deleted = TRUE 
+	tag, err := r.db.Exec(ctx, `UPDATE products
+     SET is_deleted = TRUE
      WHERE admin_id = $1 AND id = $2`, adminID, id)
 	if err != nil {
 		return err
@@ -209,6 +209,17 @@ func (r *Repository) Delete(ctx context.Context, adminID, id int) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// DeleteAll soft-deletes every not-yet-deleted product for this admin, e.g.
+// for a "start fresh" reset of the product catalog. Returns how many rows
+// were affected.
+func (r *Repository) DeleteAll(ctx context.Context, adminID int) (int, error) {
+	tag, err := r.db.Exec(ctx, `UPDATE products SET is_deleted = TRUE, updated_at = now() WHERE admin_id = $1 AND is_deleted = false`, adminID)
+	if err != nil {
+		return 0, err
+	}
+	return int(tag.RowsAffected()), nil
 }
 
 func itoa(n int) string {

@@ -29,6 +29,7 @@ func (h *Handler) RegisterAdminRoutes(rg *gin.RouterGroup) {
 	rg.PUT("/:id", h.update)
 	rg.PATCH("/:id/status", h.setActive)
 	rg.DELETE("/:id", h.delete)
+	rg.DELETE("", h.deleteAll)
 }
 
 // RegisterSalesRoutes wires the read-only product picker used by the "New
@@ -185,6 +186,18 @@ func (h *Handler) delete(c *gin.Context) {
 		return
 	}
 	response.OK(c, http.StatusOK, "product removed", nil)
+}
+
+// deleteAll soft-deletes every product for this admin — a "start fresh"
+// reset of the product catalog.
+func (h *Handler) deleteAll(c *gin.Context) {
+	claims := middleware.FromContext(c)
+	count, err := h.service.DeleteAll(c.Request.Context(), claims.AdminID)
+	if err != nil {
+		response.Fail(c, http.StatusInternalServerError, "could not delete products")
+		return
+	}
+	response.OK(c, http.StatusOK, "products removed", gin.H{"deleted_count": count})
 }
 
 func respondNotFound(c *gin.Context, err error) {

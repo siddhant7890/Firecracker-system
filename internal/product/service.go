@@ -62,3 +62,8 @@ func (s *Service) SetActive(ctx context.Context, adminID, id int, active bool) e
 func (s *Service) Delete(ctx context.Context, adminID, id int) error {
 	return s.repo.Delete(ctx, adminID, id)
 }
+
+// DeleteAll soft-deletes every product belonging to this admin.
+func (s *Service) DeleteAll(ctx context.Context, adminID int) (int, error) {
+	return s.repo.DeleteAll(ctx, adminID)
+}
