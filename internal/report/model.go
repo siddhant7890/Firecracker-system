@@ -36,7 +36,7 @@ type BillRow struct {
 }
 
 const (
-	billRowItemName  = "Mixed Fire Works"
+	billRowItemName  = "Mix Fire Works"
 	billRowHSNCode   = "36040000"
 	billRowItemCount = 1
 )

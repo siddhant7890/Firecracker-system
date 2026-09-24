@@ -33,8 +33,8 @@ func (s *Service) BuildBillWiseExcel(ctx context.Context, adminID int, f Filter)
 	f2 := excelize.NewFile()
 	sheet := "Bill-wise"
 	f2.SetSheetName("Sheet1", sheet)
-	headers := []string{"Date", "Bill No", "Customer Name", "Item / Particulars", "HSN Code", "Items",
-		"Discount Amt", "Taxable Amt", "CGST Amt", "SGST Amt", "Total Amt", "Total Cash", "Total UPI", "Status", "Payment Mode"}
+	headers := []string{"Date", "Voucher No", "Party Name", "Item Name", "HSN Code", "Items",
+		"Discount Amt", "Taxable Amt", "CGST Amt", "SGST Amt", "Total Amt", "Total Cash", "Total UPI", "Status", "Ledger"}
 	for i, h := range headers {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
 		f2.SetCellValue(sheet, cell, h)
