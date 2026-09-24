@@ -34,7 +34,7 @@ func (s *Service) BuildBillWiseExcel(ctx context.Context, adminID int, f Filter)
 	sheet := "Bill-wise"
 	f2.SetSheetName("Sheet1", sheet)
 	headers := []string{"Date", "Voucher No", "Party Name", "Item Name", "HSN Code", "Items",
-		"Discount Amt", "Taxable Amt", "CGST Amt", "SGST Amt", "Total Amt", "Total Cash", "Total UPI", "Status", "Ledger"}
+		"Discount Amt", "Round Off", "Taxable Amt", "CGST Amt", "SGST Amt", "Total Amt", "Total Cash", "Total UPI", "Status", "Ledger"}
 	for i, h := range headers {
 		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
 		f2.SetCellValue(sheet, cell, h)
@@ -42,7 +42,7 @@ func (s *Service) BuildBillWiseExcel(ctx context.Context, adminID int, f Filter)
 	for r, row := range rows {
 		rowNum := r + 2
 		values := []any{row.Date, row.BillNo, row.CustomerName, row.ItemName, row.HSNCode, row.ItemCount,
-			row.DiscountAmount, row.TaxableAmount, row.CGSTAmount, row.SGSTAmount, row.TotalAmount,
+			row.DiscountAmount, row.RoundOff, row.TaxableAmount, row.CGSTAmount, row.SGSTAmount, row.TotalAmount,
 			row.TotalCash, row.TotalUPI, row.Status, row.PaymentMode}
 		for i, v := range values {
 			cell, _ := excelize.CoordinatesToCellName(i+1, rowNum)

@@ -98,22 +98,23 @@ func (r *Repository) Create(ctx context.Context, adminID, salesStaffID int, req 
 	}
 	taxableTotal, cgstTotal, sgstTotal, grandTotal = utils.Round2(taxableTotal), utils.Round2(cgstTotal), utils.Round2(sgstTotal), utils.Round2(grandTotal)
 	discountAmount := utils.Round2(req.DiscountAmount)
+	roundOff := req.RoundOff
 	grandTotal = utils.Round2(grandTotal - discountAmount)
 
 	var bill Bill
 	err = tx.QueryRow(ctx, `
 		INSERT INTO bills (admin_id, sales_staff_id, bill_no, financial_year, customer_name, customer_mobile,
 			token_number, number_of_cartoon, gst_number,
-			taxable_amount, cgst_amount, sgst_amount, discount_amount, total_amount, status)
-		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, 0), NULLIF($9, ''), $10, $11, $12, $13, $14, 'pending')
+			taxable_amount, cgst_amount, sgst_amount, discount_amount, round_off, total_amount, status)
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, 0), NULLIF($9, ''), $10, $11, $12, $13, $14, $15, 'pending')
 		RETURNING id, bill_no, financial_year, customer_name, COALESCE(customer_mobile, ''),
 			COALESCE(token_number, ''), COALESCE(number_of_cartoon, 0), COALESCE(gst_number, ''),
-			taxable_amount, cgst_amount, sgst_amount, discount_amount, total_amount, status, whatsapp_sent, created_at
+			taxable_amount, cgst_amount, sgst_amount, discount_amount, round_off, total_amount, status, whatsapp_sent, created_at
 	`, adminID, salesStaffID, billNo, fy, customerName, req.CustomerMobile,
-		req.TokenNumber, req.NumberOfCartoon, req.GSTNumber, taxableTotal, cgstTotal, sgstTotal, discountAmount, grandTotal).
+		req.TokenNumber, req.NumberOfCartoon, req.GSTNumber, taxableTotal, cgstTotal, sgstTotal, discountAmount, roundOff, grandTotal).
 		Scan(&bill.ID, &bill.BillNo, &bill.FinancialYear, &bill.CustomerName, &bill.CustomerMobile,
 			&bill.TokenNumber, &bill.NumberOfCartoon, &bill.GSTNumber,
-			&bill.TaxableAmount, &bill.CGSTAmount, &bill.SGSTAmount, &bill.DiscountAmount, &bill.TotalAmount, &bill.Status, &bill.WhatsappSent, &bill.CreatedAt)
+			&bill.TaxableAmount, &bill.CGSTAmount, &bill.SGSTAmount, &bill.DiscountAmount, &bill.RoundOff, &bill.TotalAmount, &bill.Status, &bill.WhatsappSent, &bill.CreatedAt)
 	if err != nil {
 		return Bill{}, err
 	}
@@ -152,7 +153,7 @@ func (r *Repository) Create(ctx context.Context, adminID, salesStaffID int, req 
 const billSelectCols = `
 	b.id, b.admin_id, b.sales_staff_id, s.name, b.bill_no, b.financial_year, b.customer_name,
 	COALESCE(b.customer_mobile, ''), COALESCE(b.token_number, ''), COALESCE(b.number_of_cartoon, 0), COALESCE(b.gst_number, ''),
-	b.taxable_amount, b.cgst_amount, b.sgst_amount, b.discount_amount, b.total_amount,
+	b.taxable_amount, b.cgst_amount, b.sgst_amount, b.discount_amount, b.round_off, b.total_amount,
 	b.status, b.payment_mode, b.total_cash, b.total_upi, COALESCE(b.razorpay_order_id, ''), COALESCE(b.razorpay_payment_id, ''),
 	b.whatsapp_sent, b.approved_at, b.created_at,
 	(SELECT COUNT(*) FROM bill_items bi WHERE bi.bill_id = b.id)
@@ -167,7 +168,7 @@ func scanBillRow(row pgx.Row) (Bill, error) {
 	var mode *string
 	err := row.Scan(&b.ID, &b.AdminID, &b.SalesStaffID, &b.SalesStaffName, &b.BillNo, &b.FinancialYear,
 		&b.CustomerName, &b.CustomerMobile, &b.TokenNumber, &b.NumberOfCartoon, &b.GSTNumber,
-		&b.TaxableAmount, &b.CGSTAmount, &b.SGSTAmount, &b.DiscountAmount, &b.TotalAmount,
+		&b.TaxableAmount, &b.CGSTAmount, &b.SGSTAmount, &b.DiscountAmount, &b.RoundOff, &b.TotalAmount,
 		&status, &mode, &b.TotalCash, &b.TotalUPI, &b.RazorpayOrderID, &b.RazorpayPaymentID, &b.WhatsappSent, &b.ApprovedAt, &b.CreatedAt, &b.ItemCount)
 	b.Status = Status(status)
 	if mode != nil {
@@ -356,10 +357,13 @@ func (r *Repository) UpdateBill(ctx context.Context, adminID, id int, req Update
 	}
 	defer tx.Rollback(ctx)
 
-	var discount, totalCash, totalUPI *float64
+	var discount, roundOff, totalCash, totalUPI *float64
 	if req.DiscountAmount != nil {
 		d := utils.Round2(*req.DiscountAmount)
 		discount = &d
+	}
+	if req.RoundOff != nil {
+		roundOff = req.RoundOff
 	}
 	if req.TotalCash != nil {
 		c := utils.Round2(*req.TotalCash)
@@ -405,13 +409,14 @@ func (r *Repository) UpdateBill(ctx context.Context, adminID, id int, req Update
 			taxable_amount    = COALESCE($9, taxable_amount),
 			cgst_amount       = COALESCE($10, cgst_amount),
 			sgst_amount       = COALESCE($11, sgst_amount),
+			round_off         = COALESCE($15, round_off),
 			total_amount      = COALESCE($9, taxable_amount) + COALESCE($10, cgst_amount) + COALESCE($11, sgst_amount) - COALESCE($8, discount_amount),
 			payment_mode      = COALESCE($12, payment_mode),
 			total_cash        = COALESCE($13, total_cash),
 			total_upi         = COALESCE($14, total_upi)
 		WHERE admin_id = $1 AND id = $2
 	`, adminID, id, req.CustomerName, req.CustomerMobile, req.TokenNumber, req.NumberOfCartoon, req.GSTNumber,
-		discount, taxable, cgst, sgst, req.PaymentMode, totalCash, totalUPI)
+		discount, taxable, cgst, sgst, req.PaymentMode, totalCash, totalUPI, roundOff)
 	if err != nil {
 		return Bill{}, err
 	}
@@ -465,7 +470,7 @@ func (r *Repository) Reject(ctx context.Context, adminID, id, approvedBy int, ap
 
 	tag, err := tx.Exec(ctx, `
 		UPDATE bills SET status = 'rejected', approved_by = $3, approved_by_role = $4, approved_at = now(),
-			taxable_amount = 0, cgst_amount = 0, sgst_amount = 0, discount_amount = 0, total_amount = 0,
+			taxable_amount = 0, cgst_amount = 0, sgst_amount = 0, discount_amount = 0, round_off = 0, total_amount = 0,
 			total_cash = 0, total_upi = 0
 		WHERE admin_id = $1 AND id = $2 AND status = 'pending'
 	`, adminID, id, approvedBy, approverRole)

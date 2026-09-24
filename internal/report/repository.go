@@ -23,7 +23,7 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 func (r *Repository) BillWise(ctx context.Context, adminID int, f Filter, start, limit int) ([]BillRow, error) {
 	query := `
 		SELECT to_char(b.created_at, 'DD/MM/YYYY'), b.bill_no, b.customer_name,
-			b.discount_amount, b.taxable_amount, b.cgst_amount, b.sgst_amount, b.total_amount, b.status,
+			b.discount_amount, b.round_off, b.taxable_amount, b.cgst_amount, b.sgst_amount, b.total_amount, b.status,
 			COALESCE(b.payment_mode::text, ''), b.total_cash, b.total_upi
 		FROM bills b
 		WHERE b.admin_id = $1 AND b.created_at >= $2 AND b.created_at < $3`
@@ -62,7 +62,7 @@ func (r *Repository) BillWise(ctx context.Context, adminID int, f Filter, start,
 		var row BillRow
 		var storedCash, storedUPI *float64
 		if err := rows.Scan(&row.Date, &row.BillNo, &row.CustomerName,
-			&row.DiscountAmount, &row.TaxableAmount, &row.CGSTAmount, &row.SGSTAmount, &row.TotalAmount, &row.Status, &row.PaymentMode,
+			&row.DiscountAmount, &row.RoundOff, &row.TaxableAmount, &row.CGSTAmount, &row.SGSTAmount, &row.TotalAmount, &row.Status, &row.PaymentMode,
 			&storedCash, &storedUPI); err != nil {
 			return nil, err
 		}
