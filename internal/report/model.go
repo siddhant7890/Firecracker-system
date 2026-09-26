@@ -3,14 +3,15 @@ package report
 import "time"
 
 // Filter matches the Report Management screen: a date range, plus either
-// "All entries" or "By sales person", optionally narrowed to one bill_no
-// and/or one payment_mode.
+// "All entries" or "By sales person", optionally narrowed to one bill_no,
+// one payment_mode, and/or one bill_prefix (which shop's bills, e.g. "SF/A").
 type Filter struct {
 	From        time.Time
 	To          time.Time
 	StaffID     *int
 	BillNo      *string
 	PaymentMode *string
+	BillPrefix  *string
 }
 
 // BillRow is one row of the "Bill-wise" report tab. ItemName, HSNCode, and

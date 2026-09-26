@@ -124,12 +124,24 @@ func parseFilter(c *gin.Context) Filter {
 	if pm := c.Query("payment_mode"); isValidPaymentMode(pm) {
 		f.PaymentMode = &pm
 	}
+	if bp := c.Query("bill_prefix"); isValidBillPrefix(bp) {
+		f.BillPrefix = &bp
+	}
 	return f
 }
 
 func isValidPaymentMode(pm string) bool {
 	switch billing.PaymentMode(pm) {
 	case billing.PaymentCash, billing.PaymentUPI, billing.PaymentCashUPI, billing.PaymentCredit:
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidBillPrefix(bp string) bool {
+	switch bp {
+	case billing.PrefixShopAKR, billing.PrefixShop1415:
 		return true
 	default:
 		return false

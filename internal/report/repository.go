@@ -41,6 +41,10 @@ func (r *Repository) BillWise(ctx context.Context, adminID int, f Filter, start,
 		args = append(args, *f.PaymentMode)
 		query += fmt.Sprintf(" AND b.payment_mode::text = $%d", len(args))
 	}
+	if f.BillPrefix != nil {
+		args = append(args, likePrefix(*f.BillPrefix))
+		query += fmt.Sprintf(" AND b.bill_no LIKE $%d ESCAPE '\\'", len(args))
+	}
 	query += ` ORDER BY b.created_at DESC`
 	if limit > 0 {
 		args = append(args, limit)
