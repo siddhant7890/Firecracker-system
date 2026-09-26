@@ -23,14 +23,14 @@ func (r *Repository) Create(ctx context.Context, adminID int, name, mobile, shop
 	err := r.db.QueryRow(ctx, `
 		INSERT INTO sales_staff (admin_id, name, mobile_number, shop_number, role, login_code)
 		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, admin_id, name, mobile_number, shop_number, role, login_code, is_active, created_at
-	`, adminID, name, mobile, shopNumber, role, code).Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.ShopNumber, &s.Role, &s.LoginCode, &s.IsActive, &s.CreatedAt)
+		RETURNING id, admin_id, name, mobile_number, shop_number, role, login_code, is_active, login_status, created_at
+	`, adminID, name, mobile, shopNumber, role, code).Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.ShopNumber, &s.Role, &s.LoginCode, &s.IsActive, &s.LoginStatus, &s.CreatedAt)
 	return s, err
 }
 
 func (r *Repository) ListByAdmin(ctx context.Context, adminID int) ([]SalesStaff, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT id, admin_id, name, mobile_number, shop_number, role, login_code, is_active, created_at
+		SELECT id, admin_id, name, mobile_number, shop_number, role, login_code, is_active, login_status, created_at
 		FROM sales_staff WHERE admin_id = $1  AND is_deleted = false ORDER BY created_at DESC
 	`, adminID)
 	if err != nil {
@@ -41,7 +41,7 @@ func (r *Repository) ListByAdmin(ctx context.Context, adminID int) ([]SalesStaff
 	var out []SalesStaff
 	for rows.Next() {
 		var s SalesStaff
-		if err := rows.Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.ShopNumber, &s.Role, &s.LoginCode, &s.IsActive, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.ShopNumber, &s.Role, &s.LoginCode, &s.IsActive, &s.LoginStatus, &s.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, s)
@@ -52,9 +52,9 @@ func (r *Repository) ListByAdmin(ctx context.Context, adminID int) ([]SalesStaff
 func (r *Repository) GetByID(ctx context.Context, adminID, id int) (SalesStaff, error) {
 	var s SalesStaff
 	err := r.db.QueryRow(ctx, `
-		SELECT id, admin_id, name, mobile_number, shop_number, role, login_code, is_active, created_at
+		SELECT id, admin_id, name, mobile_number, shop_number, role, login_code, is_active, login_status, created_at
 		FROM sales_staff WHERE admin_id = $1 AND id = $2
-	`, adminID, id).Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.ShopNumber, &s.Role, &s.LoginCode, &s.IsActive, &s.CreatedAt)
+	`, adminID, id).Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.ShopNumber, &s.Role, &s.LoginCode, &s.IsActive, &s.LoginStatus, &s.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return s, ErrNotFound
 	}
@@ -66,16 +66,16 @@ func (r *Repository) GetByID(ctx context.Context, adminID, id int) (SalesStaff, 
 func (r *Repository) GetByMobile(ctx context.Context, mobile string) (SalesStaff, error) {
 	var s SalesStaff
 	err := r.db.QueryRow(ctx, `
-		SELECT id, admin_id, name, mobile_number, shop_number, role, login_code, is_active, created_at
+		SELECT id, admin_id, name, mobile_number, shop_number, role, login_code, is_active, login_status, created_at
 		FROM sales_staff WHERE mobile_number = $1
-	`, mobile).Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.ShopNumber, &s.Role, &s.LoginCode, &s.IsActive, &s.CreatedAt)
+	`, mobile).Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.ShopNumber, &s.Role, &s.LoginCode, &s.IsActive, &s.LoginStatus, &s.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return s, ErrNotFound
 	}
 	return s, err
 }
 
-func (r *Repository) Update(ctx context.Context, adminID, id int, name, mobile, shopNumber, role, loginCode *string) (SalesStaff, error) {
+func (r *Repository) Update(ctx context.Context, adminID, id int, name, mobile, shopNumber, role, loginCode *string, loginStatus *bool) (SalesStaff, error) {
 	var s SalesStaff
 	err := r.db.QueryRow(ctx, `
 		UPDATE sales_staff SET
@@ -83,10 +83,11 @@ func (r *Repository) Update(ctx context.Context, adminID, id int, name, mobile, 
 			mobile_number = COALESCE($4, mobile_number),
 			shop_number = COALESCE($5, shop_number),
 			role = COALESCE($6, role),
-			login_code = COALESCE($7, login_code)
+			login_code = COALESCE($7, login_code),
+			login_status = COALESCE($8, login_status)
 		WHERE admin_id = $1 AND id = $2
-		RETURNING id, admin_id, name, mobile_number, shop_number, role, login_code, is_active, created_at
-	`, adminID, id, name, mobile, shopNumber, role, loginCode).Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.ShopNumber, &s.Role, &s.LoginCode, &s.IsActive, &s.CreatedAt)
+		RETURNING id, admin_id, name, mobile_number, shop_number, role, login_code, is_active, login_status, created_at
+	`, adminID, id, name, mobile, shopNumber, role, loginCode, loginStatus).Scan(&s.ID, &s.AdminID, &s.Name, &s.MobileNumber, &s.ShopNumber, &s.Role, &s.LoginCode, &s.IsActive, &s.LoginStatus, &s.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return s, ErrNotFound
 	}

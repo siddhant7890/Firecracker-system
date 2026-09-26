@@ -104,7 +104,7 @@ func (h *Handler) loginSales(c *gin.Context) {
 	if err != nil {
 		status := http.StatusUnauthorized
 		msg := "mobile number is incorrect"
-		if errors.Is(err, staff.ErrInactive) {
+		if errors.Is(err, staff.ErrInactive) || errors.Is(err, staff.ErrLoginDisabled) {
 			msg = err.Error()
 		}
 		response.Fail(c, status, msg)
@@ -135,7 +135,7 @@ func (h *Handler) loginCash(c *gin.Context) {
 	if err != nil {
 		status := http.StatusUnauthorized
 		msg := "mobile number is incorrect"
-		if errors.Is(err, staff.ErrInactive) {
+		if errors.Is(err, staff.ErrInactive) || errors.Is(err, staff.ErrLoginDisabled) {
 			msg = err.Error()
 		}
 		response.Fail(c, status, msg)

@@ -26,6 +26,7 @@ type SalesStaff struct {
 	Role         string    `json:"role"`
 	LoginCode    string    `json:"login_code"`
 	IsActive     bool      `json:"is_active"`
+	LoginStatus  bool      `json:"login_status"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
@@ -46,6 +47,7 @@ type UpdateStaffRequest struct {
 	ShopNumber   *string `json:"shop_number" binding:"omitempty,oneof=SHOP-AKR SHOP-14-15"`
 	Role         *string `json:"role" binding:"omitempty,oneof=sale_agent cash_agent"`
 	LoginCode    *string `json:"login_code" binding:"omitempty,len=4"`
+	LoginStatus  *bool   `json:"login_status,omitempty"`
 }
 
 type ResetCodeResponse struct {

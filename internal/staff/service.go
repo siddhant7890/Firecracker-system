@@ -38,7 +38,7 @@ func (s *Service) Get(ctx context.Context, adminID, id int) (SalesStaff, error) 
 }
 
 func (s *Service) Update(ctx context.Context, adminID, id int, req UpdateStaffRequest) (SalesStaff, error) {
-	return s.repo.Update(ctx, adminID, id, req.Name, req.MobileNumber, req.ShopNumber, req.Role, req.LoginCode)
+	return s.repo.Update(ctx, adminID, id, req.Name, req.MobileNumber, req.ShopNumber, req.Role, req.LoginCode, req.LoginStatus)
 }
 
 func (s *Service) SetActive(ctx context.Context, adminID, id int, active bool) error {
@@ -75,6 +75,9 @@ func (s *Service) VerifyLogin(ctx context.Context, mobile, code, expectedRole st
 	}
 	if !member.IsActive {
 		return SalesStaff{}, ErrInactive
+	}
+	if !member.LoginStatus {
+		return SalesStaff{}, ErrLoginDisabled
 	}
 	if member.LoginCode != code || member.Role != expectedRole {
 		return SalesStaff{}, ErrBadCredentials
