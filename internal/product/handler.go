@@ -6,17 +6,19 @@ import (
 	"strconv"
 
 	"salestrack/internal/middleware"
+	"salestrack/internal/staff"
 	"salestrack/pkg/response"
 
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
-	service *Service
+	service  *Service
+	staffSvc *staff.Service
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service *Service, staffSvc *staff.Service) *Handler {
+	return &Handler{service: service, staffSvc: staffSvc}
 }
 
 // RegisterAdminRoutes wires the full CRUD used by the admin "Product
@@ -38,6 +40,7 @@ func (h *Handler) RegisterAdminRoutes(rg *gin.RouterGroup) {
 func (h *Handler) RegisterSalesRoutes(rg *gin.RouterGroup) {
 	rg.GET("", h.listActive)
 	rg.GET("/all", h.listAll)
+	rg.GET("/list", h.listWithStaff)
 }
 
 func (h *Handler) create(c *gin.Context) {
@@ -102,6 +105,30 @@ func (h *Handler) listActive(c *gin.Context) {
 		return
 	}
 	response.OK(c, http.StatusOK, "", out)
+}
+
+// listWithStaff returns every non-deleted product for the admin (active and
+// inactive alike — ListByAdmin always excludes is_deleted rows regardless of
+// activeOnly) alongside the calling staff member's own record, including
+// login_status, resolved from their JWT. Lets the app fetch the product list
+// and its own current staff status in a single call.
+func (h *Handler) listWithStaff(c *gin.Context) {
+	claims := middleware.FromContext(c)
+	member, err := h.staffSvc.Get(c.Request.Context(), claims.AdminID, claims.UserID)
+	if err != nil {
+		response.Fail(c, http.StatusInternalServerError, "could not load staff details")
+		return
+	}
+	start, limit := parsePaging(c)
+	out, err := h.service.List(c.Request.Context(), claims.AdminID, false, c.Query("category"), c.Query("search"), start, limit)
+	if err != nil {
+		response.Fail(c, http.StatusInternalServerError, "could not load products")
+		return
+	}
+	response.OK(c, http.StatusOK, "", gin.H{
+		"products": out,
+		"staff":    member,
+	})
 }
 
 // parsePaging reads "start" and "limit" query params. start defaults to 0;

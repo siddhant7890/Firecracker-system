@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"salestrack/internal/billing"
+
 	"github.com/xuri/excelize/v2"
 )
 
@@ -24,11 +26,15 @@ func (s *Service) ProductWise(ctx context.Context, adminID int, f Filter, start,
 }
 
 // BuildBillWiseExcel powers the "Download Excel" button on the Bill-wise tab.
+// Only settled bills (approved or rejected) belong in the download — pending
+// ones are excluded here even though the on-screen Bill-wise report tab
+// still shows them.
 func (s *Service) BuildBillWiseExcel(ctx context.Context, adminID int, f Filter) (*excelize.File, error) {
 	rows, err := s.BillWise(ctx, adminID, f, 0, 0)
 	if err != nil {
 		return nil, err
 	}
+	rows = excludePendingRows(rows)
 
 	f2 := excelize.NewFile()
 	sheet := "Bill-wise"
@@ -83,4 +89,16 @@ func (s *Service) BuildProductWiseExcel(ctx context.Context, adminID int, f Filt
 
 func FileName(reportType string, f Filter) string {
 	return fmt.Sprintf("%s-report_%s_to_%s.xlsx", reportType, f.From.Format("2006-01-02"), f.To.Format("2006-01-02"))
+}
+
+// excludePendingRows drops pending bills, keeping only settled ones
+// (approved or rejected).
+func excludePendingRows(rows []BillRow) []BillRow {
+	out := make([]BillRow, 0, len(rows))
+	for _, row := range rows {
+		if row.Status == string(billing.StatusApproved) || row.Status == string(billing.StatusRejected) {
+			out = append(out, row)
+		}
+	}
+	return out
 }

@@ -35,7 +35,7 @@ func main() {
 
 	productRepo := product.NewRepository(db)
 	productSvc := product.NewService(productRepo)
-	productHandler := product.NewHandler(productSvc)
+	productHandler := product.NewHandler(productSvc, staffSvc)
 
 	billingRepo := billing.NewRepository(db)
 	billingSvc := billing.NewService(billingRepo, productSvc)
