@@ -102,14 +102,15 @@ type ApproveBillRequest struct {
 // UpdateBillRequest lets admin or sales staff correct a bill after it's been
 // created — the payment mode (e.g. cash entered by mistake instead of UPI),
 // its cash/UPI split (when payment_mode is "cash_upi"), its customer/header
-// details (name, mobile, token, carton count, GST number, discount), and/or
-// its line items. Every field is optional/partial: omit a field to leave it
+// details (name, mobile, token, carton count, GST number), its line items,
+// and/or its money fields (discount, round-off, taxable/CGST/SGST/total
+// amount). Every field is optional/partial: omit a field to leave it
 // unchanged. Items is a pointer so it can distinguish "not sent" (leave
 // items as-is) from "sent as an empty list" (rejected — a bill can't have
-// zero items); when sent, the whole item list is replaced and
-// taxable/CGST/SGST/total are recalculated from it exactly like on create.
-// Changing discount_amount (with or without new items) also recalculates
-// total_amount.
+// zero items); when sent, the whole item list is replaced as-is. The money
+// fields are saved exactly as sent — the backend does not derive or
+// recompute any of them (not from items, not from each other), so the
+// caller is responsible for sending consistent values.
 type UpdateBillRequest struct {
 	PaymentMode     *PaymentMode             `json:"payment_mode,omitempty" binding:"omitempty,oneof=cash upi cash_upi credit"`
 	TotalCash       *float64                 `json:"total_cash,omitempty" binding:"omitempty,gte=0"`
@@ -121,6 +122,10 @@ type UpdateBillRequest struct {
 	GSTNumber       *string                  `json:"gst_number,omitempty"`
 	DiscountAmount  *float64                 `json:"discount_amount,omitempty" binding:"omitempty,gte=0"`
 	RoundOff        *float64                 `json:"round_off,omitempty"`
+	TaxableAmount   *float64                 `json:"taxable_amount,omitempty" binding:"omitempty,gte=0"`
+	CGSTAmount      *float64                 `json:"cgst_amount,omitempty" binding:"omitempty,gte=0"`
+	SGSTAmount      *float64                 `json:"sgst_amount,omitempty" binding:"omitempty,gte=0"`
+	TotalAmount     *float64                 `json:"total_amount,omitempty" binding:"omitempty,gte=0"`
 	Items           *[]CreateBillItemRequest `json:"items,omitempty" binding:"omitempty,dive"`
 }
 

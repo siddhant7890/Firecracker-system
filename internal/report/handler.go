@@ -127,6 +127,9 @@ func parseFilter(c *gin.Context) Filter {
 	if bp := c.Query("bill_prefix"); isValidBillPrefix(bp) {
 		f.BillPrefix = &bp
 	}
+	if s := c.Query("status"); isValidStatus(s) {
+		f.Status = &s
+	}
 	return f
 }
 
@@ -142,6 +145,15 @@ func isValidPaymentMode(pm string) bool {
 func isValidBillPrefix(bp string) bool {
 	switch bp {
 	case billing.PrefixShopAKR, billing.PrefixShop1415:
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidStatus(s string) bool {
+	switch billing.Status(s) {
+	case billing.StatusPending, billing.StatusApproved, billing.StatusRejected:
 		return true
 	default:
 		return false

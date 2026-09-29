@@ -340,16 +340,16 @@ func (r *Repository) Approve(ctx context.Context, adminID, id, approvedBy int, a
 // UpdateBill lets admin or sales staff correct a bill after it's been
 // created: payment mode (e.g. cash entered by mistake instead of UPI), its
 // cash/UPI split (total_cash/total_upi, when payment_mode is "cash_upi"),
-// customer/header details (name, mobile, token, carton count, GST number,
-// discount), and/or its line items. Every field in req is a pointer, so a
-// nil one leaves that column unchanged — only the fields the caller
-// actually sent are touched. When req.Items is set, products carries the
-// verified product_id -> name/HSN lookup for those lines (resolved by the
-// service layer, same as on create): the bill's existing items are replaced
-// wholesale and taxable/CGST/SGST are recomputed from the new lines. Either
-// way, total_amount is recalculated from the (possibly just-updated)
-// taxable/CGST/SGST/discount so a changed discount or item list takes
-// effect immediately.
+// customer/header details (name, mobile, token, carton count, GST number),
+// its line items, and/or its money fields (discount_amount, round_off,
+// taxable_amount, cgst_amount, sgst_amount, total_amount). Every field in
+// req is a pointer, so a nil one leaves that column unchanged — only the
+// fields the caller actually sent are touched. When req.Items is set,
+// products carries the verified product_id -> name/HSN lookup for those
+// lines (resolved by the service layer, same as on create) and the bill's
+// existing items are replaced wholesale — as-is, with no recomputation of
+// the bill's own totals from them. Every money field is saved exactly as
+// sent; the caller (frontend) is responsible for sending consistent values.
 func (r *Repository) UpdateBill(ctx context.Context, adminID, id int, req UpdateBillRequest, products map[int]ProductSnapshot) (Bill, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
@@ -357,27 +357,8 @@ func (r *Repository) UpdateBill(ctx context.Context, adminID, id int, req Update
 	}
 	defer tx.Rollback(ctx)
 
-	var discount, roundOff, totalCash, totalUPI *float64
-	if req.DiscountAmount != nil {
-		d := utils.Round2(*req.DiscountAmount)
-		discount = &d
-	}
-	if req.RoundOff != nil {
-		roundOff = req.RoundOff
-	}
-	if req.TotalCash != nil {
-		c := utils.Round2(*req.TotalCash)
-		totalCash = &c
-	}
-	if req.TotalUPI != nil {
-		u := utils.Round2(*req.TotalUPI)
-		totalUPI = &u
-	}
-
-	var taxable, cgst, sgst *float64
 	var newItems []BillItem
 	if req.Items != nil {
-		var taxableTotal, cgstTotal, sgstTotal float64
 		newItems = make([]BillItem, 0, len(*req.Items))
 		for _, line := range *req.Items {
 			p, ok := products[line.ProductID]
@@ -390,12 +371,7 @@ func (r *Repository) UpdateBill(ctx context.Context, adminID, id int, req Update
 				CGSTPercent: line.CGSTPercent, CGSTAmount: line.CGSTAmount,
 				SGSTPercent: line.SGSTPercent, SGSTAmount: line.SGSTAmount, TotalAmount: line.TotalAmount,
 			})
-			taxableTotal += line.TaxableAmount
-			cgstTotal += line.CGSTAmount
-			sgstTotal += line.SGSTAmount
 		}
-		taxableTotal, cgstTotal, sgstTotal = utils.Round2(taxableTotal), utils.Round2(cgstTotal), utils.Round2(sgstTotal)
-		taxable, cgst, sgst = &taxableTotal, &cgstTotal, &sgstTotal
 	}
 
 	tag, err := tx.Exec(ctx, `
@@ -410,13 +386,14 @@ func (r *Repository) UpdateBill(ctx context.Context, adminID, id int, req Update
 			cgst_amount       = COALESCE($10, cgst_amount),
 			sgst_amount       = COALESCE($11, sgst_amount),
 			round_off         = COALESCE($15, round_off),
-			total_amount      = COALESCE($9, taxable_amount) + COALESCE($10, cgst_amount) + COALESCE($11, sgst_amount) - COALESCE($8, discount_amount),
+			total_amount      = COALESCE($16, total_amount),
 			payment_mode      = COALESCE($12, payment_mode),
 			total_cash        = COALESCE($13, total_cash),
 			total_upi         = COALESCE($14, total_upi)
 		WHERE admin_id = $1 AND id = $2
 	`, adminID, id, req.CustomerName, req.CustomerMobile, req.TokenNumber, req.NumberOfCartoon, req.GSTNumber,
-		discount, taxable, cgst, sgst, req.PaymentMode, totalCash, totalUPI, roundOff)
+		req.DiscountAmount, req.TaxableAmount, req.CGSTAmount, req.SGSTAmount, req.PaymentMode, req.TotalCash, req.TotalUPI,
+		req.RoundOff, req.TotalAmount)
 	if err != nil {
 		return Bill{}, err
 	}
