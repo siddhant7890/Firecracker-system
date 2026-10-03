@@ -162,6 +162,6 @@ func (s *Service) ProductSalesTotals(ctx context.Context, adminID int, from, to 
 	return s.repo.ProductSalesTotals(ctx, adminID, from, to)
 }
 
-func (s *Service) SalesByAgentTotals(ctx context.Context, adminID int, from, to time.Time) ([]SalesByAgentTotal, error) {
-	return s.repo.SalesByAgentTotals(ctx, adminID, from, to)
+func (s *Service) SalesByAgentTotals(ctx context.Context, adminID int, from, to time.Time, staffID *int) ([]SalesByAgentTotal, error) {
+	return s.repo.SalesByAgentTotals(ctx, adminID, from, to, staffID)
 }

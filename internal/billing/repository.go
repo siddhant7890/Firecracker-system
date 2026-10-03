@@ -649,15 +649,21 @@ type SalesByAgentTotal struct {
 	SalesTotal     float64 `json:"sales_total"`
 }
 
-func (r *Repository) SalesByAgentTotals(ctx context.Context, adminID int, from, to time.Time) ([]SalesByAgentTotal, error) {
-	rows, err := r.db.Query(ctx, `
+// staffID, when non-nil, narrows the result to that one sales agent.
+func (r *Repository) SalesByAgentTotals(ctx context.Context, adminID int, from, to time.Time, staffID *int) ([]SalesByAgentTotal, error) {
+	query := `
 		SELECT b.sales_staff_id, s.name, COUNT(*), COALESCE(SUM(b.total_amount), 0)
 		FROM bills b
 		JOIN sales_staff s ON s.id = b.sales_staff_id
-		WHERE b.admin_id = $1 AND b.status != 'rejected' AND b.created_at >= $2 AND b.created_at < $3
-		GROUP BY b.sales_staff_id, s.name
-		ORDER BY SUM(b.total_amount) DESC
-	`, adminID, from, to)
+		WHERE b.admin_id = $1 AND b.status != 'rejected' AND b.created_at >= $2 AND b.created_at < $3`
+	args := []any{adminID, from, to}
+	if staffID != nil {
+		args = append(args, *staffID)
+		query += fmt.Sprintf(" AND b.sales_staff_id = $%d", len(args))
+	}
+	query += ` GROUP BY b.sales_staff_id, s.name ORDER BY SUM(b.total_amount) DESC`
+
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

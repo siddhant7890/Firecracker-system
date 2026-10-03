@@ -45,7 +45,7 @@ func main() {
 	paymentHandler := payment.NewHandler(paymentSvc)
 
 	adminSvc := admin.NewService(billingSvc)
-	adminHandler := admin.NewHandler(billingSvc, paymentSvc)
+	adminHandler := admin.NewHandler(billingSvc, paymentSvc, staffSvc)
 
 	reportRepo := report.NewRepository(db)
 	reportSvc := report.NewService(reportRepo)

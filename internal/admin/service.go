@@ -73,7 +73,7 @@ func (s *Service) Dashboard(ctx context.Context, adminID int, saleAgentStart, sa
 		agentFrom = *saleAgentStart
 		agentTo = saleAgentEnd.AddDate(0, 0, 1)
 	}
-	salesByAgent, err := s.billing.SalesByAgentTotals(ctx, adminID, agentFrom, agentTo)
+	salesByAgent, err := s.billing.SalesByAgentTotals(ctx, adminID, agentFrom, agentTo, nil)
 	if err != nil {
 		return DashboardResponse{}, err
 	}

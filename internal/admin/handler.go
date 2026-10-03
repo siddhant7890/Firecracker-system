@@ -9,6 +9,7 @@ import (
 	"salestrack/internal/billing"
 	"salestrack/internal/middleware"
 	"salestrack/internal/payment"
+	"salestrack/internal/staff"
 	"salestrack/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -18,12 +19,13 @@ import (
 // Product Management and User Management live in their own packages
 // (product.Handler, staff.Handler), mounted separately in main.go.
 type Handler struct {
-	billing *billing.Service
-	payment *payment.Service
+	billing  *billing.Service
+	payment  *payment.Service
+	staffSvc *staff.Service
 }
 
-func NewHandler(billingSvc *billing.Service, paymentSvc *payment.Service) *Handler {
-	return &Handler{billing: billingSvc, payment: paymentSvc}
+func NewHandler(billingSvc *billing.Service, paymentSvc *payment.Service, staffSvc *staff.Service) *Handler {
+	return &Handler{billing: billingSvc, payment: paymentSvc, staffSvc: staffSvc}
 }
 
 func (h *Handler) RegisterDashboardRoutes(rg *gin.RouterGroup, service *Service) {
@@ -46,6 +48,8 @@ func (h *Handler) RegisterDashboardRoutes(rg *gin.RouterGroup, service *Service)
 		}
 		response.OK(c, http.StatusOK, "", out)
 	})
+
+	rg.GET("/sales-by-agent", h.salesByAgent)
 }
 
 // parseDateParam reads an optional YYYY-MM-DD query param, returning nil if
@@ -60,6 +64,71 @@ func parseDateParam(c *gin.Context, name string) (*time.Time, error) {
 		return nil, err
 	}
 	return &t, nil
+}
+
+// salesByAgent reports how many bills a single sales agent (required
+// ?staff_id=) created and their total sale value within a rolling window
+// picked by ?date_range=today|week|month (defaults to "today"). Mirrors
+// billing.rangeStart's rolling-window convention ("week" is the last 7
+// days, not the calendar week).
+func (h *Handler) salesByAgent(c *gin.Context) {
+	claims := middleware.FromContext(c)
+
+	staffID, err := strconv.Atoi(c.Query("staff_id"))
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, "staff_id is required")
+		return
+	}
+	member, err := h.staffSvc.Get(c.Request.Context(), claims.AdminID, staffID)
+	if err != nil {
+		response.Fail(c, http.StatusNotFound, "sales agent not found")
+		return
+	}
+
+	from, to, err := parseDateRange(c.Query("date_range"))
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	rows, err := h.billing.SalesByAgentTotals(c.Request.Context(), claims.AdminID, from, to, &staffID)
+	if err != nil {
+		response.Fail(c, http.StatusInternalServerError, "could not load sales by agent")
+		return
+	}
+	totals := billing.SalesByAgentTotal{StaffID: member.ID, StaffName: member.Name}
+	if len(rows) > 0 {
+		totals = rows[0]
+	}
+
+	bills, err := h.billing.ListForAdmin(c.Request.Context(), claims.AdminID, billing.ListFilter{StaffID: &staffID, From: &from, To: &to})
+	if err != nil {
+		response.Fail(c, http.StatusInternalServerError, "could not load bills")
+		return
+	}
+
+	response.OK(c, http.StatusOK, "", gin.H{
+		"staff_id":        totals.StaffID,
+		"staff_name":      totals.StaffName,
+		"bills_generated": totals.BillsGenerated,
+		"sales_total":     totals.SalesTotal,
+		"bills":           bills,
+	})
+}
+
+func parseDateRange(dateRange string) (from, to time.Time, err error) {
+	now := time.Now()
+	to = now
+	switch dateRange {
+	case "", "today":
+		from = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	case "week":
+		from = now.AddDate(0, 0, -7)
+	case "month":
+		from = now.AddDate(0, -1, 0)
+	default:
+		return time.Time{}, time.Time{}, errors.New(`invalid date_range: must be "today", "week", or "month"`)
+	}
+	return from, to, nil
 }
 
 // RegisterBillRoutes wires "Cash Counter — bill approvals".
