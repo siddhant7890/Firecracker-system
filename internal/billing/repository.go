@@ -447,7 +447,7 @@ func (r *Repository) Reject(ctx context.Context, adminID, id, approvedBy int, ap
 
 	tag, err := tx.Exec(ctx, `
 		UPDATE bills SET status = 'rejected', approved_by = $3, approved_by_role = $4, approved_at = now(),
-			taxable_amount = 0, cgst_amount = 0, sgst_amount = 0, discount_amount = 0, round_off = 0, total_amount = 0,
+			taxable_amount = 0, cgst_amount = 0, sgst_amount = 0, discount_amount = 0, round_off = '', total_amount = 0,
 			total_cash = 0, total_upi = 0
 		WHERE admin_id = $1 AND id = $2 AND status = 'pending'
 	`, adminID, id, approvedBy, approverRole)

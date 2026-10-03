@@ -36,7 +36,7 @@ type Bill struct {
 	CGSTAmount        float64      `json:"cgst_amount"`
 	SGSTAmount        float64      `json:"sgst_amount"`
 	DiscountAmount    float64      `json:"discount_amount"`
-	RoundOff          float64      `json:"round_off"`
+	RoundOff          string       `json:"round_off"`
 	TotalAmount       float64      `json:"total_amount"`
 	Status            Status       `json:"status"`
 	PaymentMode       *PaymentMode `json:"payment_mode,omitempty"`
@@ -91,7 +91,7 @@ type CreateBillRequest struct {
 	NumberOfCartoon int                     `json:"number_of_cartoon" binding:"gte=0"`
 	GSTNumber       string                  `json:"gst_number"`
 	DiscountAmount  float64                 `json:"discount_amount" binding:"gte=0"`
-	RoundOff        float64                 `json:"round_off"`
+	RoundOff        string                  `json:"round_off"`
 	Items           []CreateBillItemRequest `json:"items" binding:"required,min=1,dive"`
 }
 
@@ -121,7 +121,7 @@ type UpdateBillRequest struct {
 	NumberOfCartoon *int                     `json:"number_of_cartoon,omitempty" binding:"omitempty,gte=0"`
 	GSTNumber       *string                  `json:"gst_number,omitempty"`
 	DiscountAmount  *float64                 `json:"discount_amount,omitempty" binding:"omitempty,gte=0"`
-	RoundOff        *float64                 `json:"round_off,omitempty"`
+	RoundOff        *string                  `json:"round_off,omitempty"`
 	TaxableAmount   *float64                 `json:"taxable_amount,omitempty" binding:"omitempty,gte=0"`
 	CGSTAmount      *float64                 `json:"cgst_amount,omitempty" binding:"omitempty,gte=0"`
 	SGSTAmount      *float64                 `json:"sgst_amount,omitempty" binding:"omitempty,gte=0"`

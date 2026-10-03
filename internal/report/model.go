@@ -28,7 +28,7 @@ type BillRow struct {
 	HSNCode        string  `json:"hsn_code"`
 	ItemCount      int     `json:"item_count"`
 	DiscountAmount float64 `json:"discount_amount"`
-	RoundOff       float64 `json:"round_off"`
+	RoundOff       string  `json:"round_off"`
 	TaxableAmount  float64 `json:"taxable_amount"`
 	CGSTAmount     float64 `json:"cgst_amount"`
 	SGSTAmount     float64 `json:"sgst_amount"`
