@@ -4,14 +4,15 @@ import "time"
 
 // Filter matches the Report Management screen: a date range, plus either
 // "All entries" or "By sales person", optionally narrowed to one bill_no,
-// one payment_mode, one bill_prefix (which shop's bills, e.g. "SF/A"),
-// and/or one status (pending/approved/rejected).
+// one or more payment_mode values (e.g. "cash,upi" matches either), one
+// bill_prefix (which shop's bills, e.g. "SF/A"), and/or one status
+// (pending/approved/rejected).
 type Filter struct {
 	From        time.Time
 	To          time.Time
 	StaffID     *int
 	BillNo      *string
-	PaymentMode *string
+	PaymentMode []string
 	BillPrefix  *string
 	Status      *string
 }

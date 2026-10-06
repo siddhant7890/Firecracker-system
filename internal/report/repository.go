@@ -37,9 +37,9 @@ func (r *Repository) BillWise(ctx context.Context, adminID int, f Filter, start,
 		args = append(args, likePrefix(*f.BillNo))
 		query += fmt.Sprintf(" AND b.bill_no LIKE $%d ESCAPE '\\'", len(args))
 	}
-	if f.PaymentMode != nil {
-		args = append(args, *f.PaymentMode)
-		query += fmt.Sprintf(" AND b.payment_mode::text = $%d", len(args))
+	if len(f.PaymentMode) > 0 {
+		args = append(args, f.PaymentMode)
+		query += fmt.Sprintf(" AND b.payment_mode::text = ANY($%d)", len(args))
 	}
 	if f.BillPrefix != nil {
 		args = append(args, likePrefix(*f.BillPrefix))
@@ -125,9 +125,9 @@ func (r *Repository) ProductWise(ctx context.Context, adminID int, f Filter, sta
 		args = append(args, likePrefix(*f.BillNo))
 		query += fmt.Sprintf(" AND b.bill_no LIKE $%d ESCAPE '\\'", len(args))
 	}
-	if f.PaymentMode != nil {
-		args = append(args, *f.PaymentMode)
-		query += fmt.Sprintf(" AND b.payment_mode::text = $%d", len(args))
+	if len(f.PaymentMode) > 0 {
+		args = append(args, f.PaymentMode)
+		query += fmt.Sprintf(" AND b.payment_mode::text = ANY($%d)", len(args))
 	}
 	query += ` ORDER BY b.created_at DESC, bi.id`
 	if limit > 0 {

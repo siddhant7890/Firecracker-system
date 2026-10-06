@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"salestrack/internal/billing"
@@ -121,9 +122,7 @@ func parseFilter(c *gin.Context) Filter {
 	if b := c.Query("bill_no"); b != "" {
 		f.BillNo = &b
 	}
-	if pm := c.Query("payment_mode"); isValidPaymentMode(pm) {
-		f.PaymentMode = &pm
-	}
+	f.PaymentMode = parsePaymentModes(c.Query("payment_mode"))
 	if bp := c.Query("bill_prefix"); isValidBillPrefix(bp) {
 		f.BillPrefix = &bp
 	}
@@ -131,6 +130,21 @@ func parseFilter(c *gin.Context) Filter {
 		f.Status = &s
 	}
 	return f
+}
+
+// parsePaymentModes splits a comma-separated payment_mode query param (e.g.
+// "cash,upi") into its valid values, so the report/download can match any
+// one of several modes. Unrecognized entries are dropped; an empty or
+// all-invalid input returns nil (no filter).
+func parsePaymentModes(raw string) []string {
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		pm := strings.TrimSpace(part)
+		if isValidPaymentMode(pm) {
+			out = append(out, pm)
+		}
+	}
+	return out
 }
 
 func isValidPaymentMode(pm string) bool {
