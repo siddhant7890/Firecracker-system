@@ -45,8 +45,11 @@ func (r *Repository) Create(ctx context.Context, adminID int, req CreateProductR
 
 // BulkUpsert inserts or updates products keyed on (admin_id, item_code): an
 // existing item_code gets its fields overwritten, a new one is inserted.
-// is_active/is_deleted are left untouched on update. Requires the partial
-// unique index on (admin_id, item_code) added in migration 004.
+// is_active is left untouched on update, but is_deleted is always reset to
+// false — a bulk upload that touches a previously soft-deleted item_code
+// brings it back (otherwise it'd keep updating a row that GET /products
+// can never show again). Requires the partial unique index on
+// (admin_id, item_code) added in migration 004.
 func (r *Repository) BulkUpsert(ctx context.Context, adminID int, rows []BulkUploadRow) (inserted, updated int, err error) {
 	if len(rows) == 0 {
 		return 0, 0, nil
@@ -64,6 +67,7 @@ func (r *Repository) BulkUpsert(ctx context.Context, adminID int, rows []BulkUpl
 				unit = EXCLUDED.unit,
 				taxable_value = EXCLUDED.taxable_value,
 				gst_percent = EXCLUDED.gst_percent,
+				is_deleted = false,
 				updated_at = now()
 			RETURNING (xmax = 0) AS inserted`,
 			adminID, row.ItemCode, row.Name, row.Category, row.HSNCode, row.Unit, row.TaxableValue, row.GSTPercent)
@@ -134,7 +138,7 @@ func (r *Repository) ListByAdmin(ctx context.Context, adminID int, activeOnly bo
 }
 
 func (r *Repository) GetByID(ctx context.Context, adminID, id int) (Product, error) {
-	row := r.db.QueryRow(ctx, `SELECT `+selectCols+` FROM products WHERE admin_id = $1 AND id = $2`, adminID, id)
+	row := r.db.QueryRow(ctx, `SELECT `+selectCols+` FROM products WHERE admin_id = $1 AND id = $2 AND is_deleted = false`, adminID, id)
 	p, err := scanProduct(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, ErrNotFound
