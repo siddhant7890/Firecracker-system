@@ -1,6 +1,6 @@
 runtime: go124
 env: standard
-service: default
+service: server
 instance_class: F1
 
 main: ./cmd/api
