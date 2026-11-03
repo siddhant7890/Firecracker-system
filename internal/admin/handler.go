@@ -144,29 +144,32 @@ func (h *Handler) RegisterBillRoutes(rg *gin.RouterGroup) {
 	rg.POST("/:id/verify-payment", h.verifyPayment)
 }
 
-// RegisterPublicBillRoutes wires an open (no JWT) pending-bills endpoint on
-// its own group. Since there's no token here, admin_id must be passed
-// explicitly as a query param, same as the public report download.
+// RegisterPublicBillRoutes wires open (no JWT) pending/approved bill
+// endpoints on their own group. Since there's no token here, admin_id must
+// be passed explicitly as a query param, same as the public report download.
 func (h *Handler) RegisterPublicBillRoutes(rg *gin.RouterGroup) {
-	rg.GET("/pending", h.pendingPublic)
+	rg.GET("/pending", h.listPublicByStatus(billing.StatusPending))
+	rg.GET("/approved", h.listPublicByStatus(billing.StatusApproved))
 }
 
-// pendingPublic is the open-API twin of pending: every pending bill for the
-// given admin_id, each with its full line-item details (ListForAdmin
-// attaches Items to every bill it returns), with no auth required.
-func (h *Handler) pendingPublic(c *gin.Context) {
-	adminID, err := strconv.Atoi(c.Query("admin_id"))
-	if err != nil {
-		response.Fail(c, http.StatusBadRequest, "admin_id is required")
-		return
+// listPublicByStatus is the open-API twin of pending/approvedToday: every
+// bill with the given status for the admin_id query param, each with its
+// full line-item details (ListForAdmin attaches Items to every bill it
+// returns), with no auth required.
+func (h *Handler) listPublicByStatus(status billing.Status) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		adminID, err := strconv.Atoi(c.Query("admin_id"))
+		if err != nil {
+			response.Fail(c, http.StatusBadRequest, "admin_id is required")
+			return
+		}
+		out, err := h.billing.ListForAdmin(c.Request.Context(), adminID, billing.ListFilter{Status: &status})
+		if err != nil {
+			response.Fail(c, http.StatusInternalServerError, "could not load "+string(status)+" bills")
+			return
+		}
+		response.OK(c, http.StatusOK, "", out)
 	}
-	status := billing.StatusPending
-	out, err := h.billing.ListForAdmin(c.Request.Context(), adminID, billing.ListFilter{Status: &status})
-	if err != nil {
-		response.Fail(c, http.StatusInternalServerError, "could not load pending bills")
-		return
-	}
-	response.OK(c, http.StatusOK, "", out)
 }
 
 func (h *Handler) listBills(c *gin.Context) {
