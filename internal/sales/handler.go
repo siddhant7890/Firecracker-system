@@ -7,6 +7,7 @@ import (
 
 	"salestrack/internal/billing"
 	"salestrack/internal/middleware"
+	"salestrack/internal/staff"
 	"salestrack/internal/whatsapp"
 	"salestrack/pkg/response"
 
@@ -17,11 +18,12 @@ import (
 // History, Home, Send to WhatsApp. Product listing lives in the product
 // package (RegisterSalesRoutes), mounted separately in main.go.
 type Handler struct {
-	billing *billing.Service
+	billing  *billing.Service
+	staffSvc *staff.Service
 }
 
-func NewHandler(billingSvc *billing.Service) *Handler {
-	return &Handler{billing: billingSvc}
+func NewHandler(billingSvc *billing.Service, staffSvc *staff.Service) *Handler {
+	return &Handler{billing: billingSvc, staffSvc: staffSvc}
 }
 
 func (h *Handler) Register(rg *gin.RouterGroup) {
@@ -98,6 +100,8 @@ func (h *Handler) getBill(c *gin.Context) {
 // mode (with its cash/UPI split via total_cash/total_upi), and/or its line
 // items — sending "items" replaces the whole cart and recalculates the GST
 // breakup. Every field is optional — only what's sent gets changed.
+// Cash-counter agents share the sales_staff JWT but correct bills raised by
+// other agents, so they may update any bill in their shop, not just their own.
 func (h *Handler) updateBill(c *gin.Context) {
 	claims := middleware.FromContext(c)
 	id, err := strconv.Atoi(c.Param("id"))
@@ -106,7 +110,7 @@ func (h *Handler) updateBill(c *gin.Context) {
 		return
 	}
 	existing, err := h.billing.Get(c.Request.Context(), claims.AdminID, id)
-	if err != nil || existing.SalesStaffID != claims.UserID {
+	if err != nil || (existing.SalesStaffID != claims.UserID && !h.isCashAgent(c, claims.AdminID, claims.UserID)) {
 		response.Fail(c, http.StatusNotFound, "bill not found")
 		return
 	}
@@ -142,6 +146,14 @@ func (h *Handler) sendWhatsapp(c *gin.Context) {
 		return
 	}
 	response.OK(c, http.StatusOK, "ready to send on WhatsApp", WhatsAppLinkResponse{Link: whatsapp.BuildLink(bill)})
+}
+
+// isCashAgent reports whether the caller is a cash-counter agent. The JWT
+// role is sales_staff for both agent kinds, so the staff record is the only
+// place the distinction lives.
+func (h *Handler) isCashAgent(c *gin.Context, adminID, staffID int) bool {
+	member, err := h.staffSvc.Get(c.Request.Context(), adminID, staffID)
+	return err == nil && member.Role == staff.RoleCashAgent
 }
 
 func respondBillErr(c *gin.Context, err error) {

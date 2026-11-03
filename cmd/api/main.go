@@ -39,7 +39,7 @@ func main() {
 
 	billingRepo := billing.NewRepository(db)
 	billingSvc := billing.NewService(billingRepo, productSvc)
-	salesHandler := sales.NewHandler(billingSvc)
+	salesHandler := sales.NewHandler(billingSvc, staffSvc)
 
 	paymentSvc := payment.NewService(billingSvc)
 	paymentHandler := payment.NewHandler(paymentSvc)
@@ -98,6 +98,14 @@ func main() {
 	// shipping this to production.
 	reportsPublic := api.Group("/admin/reports")
 	reportHandler.RegisterDownload(reportsPublic)
+
+	// Open API (no JWT) — admin_id passed as a query param, same convention
+	// as the public report download above. Mounted under its own prefix,
+	// not /admin/bills, since that path is already taken by the
+	// authenticated adminBills group above and gin won't allow registering
+	// the same method+path twice.
+	billsPublic := api.Group("/public/bills")
+	adminHandler.RegisterPublicBillRoutes(billsPublic)
 
 	// --- Mobile app (JWT role=sales_staff) ---
 	salesGroup := api.Group("/sales", middleware.RequireAuth(auth.RoleSalesStaff))
