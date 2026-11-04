@@ -153,9 +153,10 @@ func (h *Handler) RegisterPublicBillRoutes(rg *gin.RouterGroup) {
 }
 
 // listPublicByStatus is the open-API twin of pending/approvedToday: every
-// bill with the given status for the admin_id query param, each with its
-// full line-item details (ListForAdmin attaches Items to every bill it
-// returns), with no auth required.
+// bill with the given status for the admin_id query param, created between
+// the optional start_date/end_date (YYYY-MM-DD, inclusive; default today),
+// each with its full line-item details (ListForAdmin attaches Items to every
+// bill it returns), with no auth required.
 func (h *Handler) listPublicByStatus(status billing.Status) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		adminID, err := strconv.Atoi(c.Query("admin_id"))
@@ -163,13 +164,47 @@ func (h *Handler) listPublicByStatus(status billing.Status) gin.HandlerFunc {
 			response.Fail(c, http.StatusBadRequest, "admin_id is required")
 			return
 		}
-		out, err := h.billing.ListForAdmin(c.Request.Context(), adminID, billing.ListFilter{Status: &status})
+		from, to, err := parsePublicDateRange(c.Query("start_date"), c.Query("end_date"))
+		if err != nil {
+			response.Fail(c, http.StatusBadRequest, err.Error())
+			return
+		}
+		out, err := h.billing.ListForAdmin(c.Request.Context(), adminID, billing.ListFilter{Status: &status, From: &from, To: &to})
 		if err != nil {
 			response.Fail(c, http.StatusInternalServerError, "could not load "+string(status)+" bills")
 			return
 		}
 		response.OK(c, http.StatusOK, "", out)
 	}
+}
+
+// parsePublicDateRange turns optional inclusive start_date/end_date
+// (YYYY-MM-DD, server local time) into a [from, to) range. A missing
+// start_date falls back to end_date (or today), a missing end_date to
+// today — so sending neither returns just today's bills.
+func parsePublicDateRange(startStr, endStr string) (from, to time.Time, err error) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
+	end := today
+	if endStr != "" {
+		if end, err = time.ParseInLocation("2006-01-02", endStr, now.Location()); err != nil {
+			return time.Time{}, time.Time{}, errors.New("invalid end_date, expected YYYY-MM-DD")
+		}
+	}
+	start := end
+	if startStr != "" {
+		if start, err = time.ParseInLocation("2006-01-02", startStr, now.Location()); err != nil {
+			return time.Time{}, time.Time{}, errors.New("invalid start_date, expected YYYY-MM-DD")
+		}
+		if endStr == "" && start.After(today) {
+			end = start
+		}
+	}
+	if end.Before(start) {
+		return time.Time{}, time.Time{}, errors.New("end_date must not be before start_date")
+	}
+	return start, end.AddDate(0, 0, 1), nil
 }
 
 func (h *Handler) listBills(c *gin.Context) {
